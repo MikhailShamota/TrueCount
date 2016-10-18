@@ -2,13 +2,16 @@
  * Created by mshamota on 05.10.2016.
  */
 var stats, controls;
-var camera, scene, renderer, particleSystem;
+var camera, scene, renderer;
 var octree;
+var gravityCenters = {};
+var worldRadius = 250;//размер области отрисовки
 
 init();
 paintGL();
 
 function setPartice(num, positions, sizes, obj, size, boundingSphere) {
+
 
     var vertex = new THREE.Vector3();
     vertex.x = (Math.random() * 2 - 1) * boundingSphere.radius + boundingSphere.center.x;
@@ -26,7 +29,7 @@ function setPartice(num, positions, sizes, obj, size, boundingSphere) {
     octree.addDeferred(obj, "_id", node);
 }
 
-function addParticles(positions, sizes){
+function addParticles(positions, sizes) {
 
     //var textureLoader = new THREE.TextureLoader();
     //var tex = textureLoader.load("2.png");//THREE.ImageUtils.loadTexture("1.jpg"),
@@ -35,6 +38,7 @@ function addParticles(positions, sizes){
     var fShader = $("#NodeFragmentShader");
 
     var particleMaterial = new THREE.ShaderMaterial({
+
         uniforms: {
             //projectionMat: {value: renderer.projectionMatrix}
             vpSizeY: {value: renderer.context.canvas.height},
@@ -50,15 +54,31 @@ function addParticles(positions, sizes){
     });
 
     var geometry = new THREE.BufferGeometry();
-    geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.addAttribute('customSize', new THREE.BufferAttribute(sizes, 1));
+    geometry.addAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.addAttribute("customSize", new THREE.BufferAttribute(sizes, 1));
 
     var particles = new THREE.Points(geometry, particleMaterial);
 
     scene.add(particles);
 }
 
-function parseElements(iterator, weightProperty){
+function setGravity(obj, gravitySourceField) {
+
+    var gravityId = obj["_source"][gravitySourceField]|| THREE.Math.generateUUID();
+    if (!gravityCenters[gravityId]) {
+
+        //TODO:распределять их так, чтобы не пересекались (касались?)
+        var center = new THREE.Vector3();
+        center.x = (Math.random() * 2 - 1) * worldRadius;
+        center.y = (Math.random() * 2 - 1) * worldRadius;
+        center.z = (Math.random() * 2 - 1) * worldRadius;
+        gravityCenters[gravityId] = {position: center, count:0};
+    }
+    gravityCenters[gravityId].count++;
+}
+
+
+function parseElements(iterator, weightProperty, gravitySourceField) {
 
     if (!iterator)
         return;
@@ -67,9 +87,8 @@ function parseElements(iterator, weightProperty){
     var sizes = new Float32Array(count);
     var positions = new Float32Array(count * 3);
 
-    var world_radius = 250;//размер области отрисовки
     var biggest_size_k = 0.002;//максимальный элемент занимает world_radius * k
-    var boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), world_radius);
+    var boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), worldRadius);
 
     var size;
     var weight = 20;//default
@@ -79,8 +98,10 @@ function parseElements(iterator, weightProperty){
 
     $.each(iterator, function (key, val) {
 
+        setGravity(val, gravitySourceField);
+
         weight = weightProperty && val[weightProperty] ? val[weightProperty] : weight;//радиус вписанной окружности точки
-        sizeScale = i == 0 ? biggest_size_k * world_radius / weight : sizeScale;//первое значение в выборке самое большое
+        sizeScale = i == 0 ? biggest_size_k * worldRadius / weight : sizeScale;//первое значение в выборке самое большое
         size = weight * sizeScale;
 
         setPartice(i, positions, sizes, val, size, boundingSphere);
@@ -98,13 +119,14 @@ function buildParticles() {
         var hits = json["hits"].hits;
         var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-        parseElements(hits, null);
-        parseElements(agg, "doc_count");
+        parseElements(hits, null, "this@tablename");
+        parseElements(agg, "doc_count", null);
+
         buildBranches();
     });
 }
 
-function addLine(from, to, branchesObj){
+function addLine(from, to, branchesObj) {
 
     var v1 = from.position;
     var v2 = to.position;
@@ -136,7 +158,7 @@ function addLine(from, to, branchesObj){
     branchesObj.add(mesh);
 }
 
-function buildBranches(){
+function buildBranches() {
 
     var branches = new THREE.Object3D();
 
@@ -164,7 +186,7 @@ function buildBranches(){
     scene.add(branches);
 }
 
-function update(){
+function update() {
 
     controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
     stats.update();
@@ -217,7 +239,7 @@ function initStats() {
     document.getElementById("Stats-output").appendChild(stats.domElement);
 }
 
-function initControls(){
+function initControls() {
     controls = new THREE.OrbitControls( camera, renderer.domElement );
     //controls.addEventListener( 'change', render ); // add this only if there is no animation loop (requestAnimationFrame)
     controls.enableDamping = true;
@@ -225,7 +247,7 @@ function initControls(){
     controls.enableZoom = true;
 }
 
-function initOctree(){
+function initOctree() {
     //octree = new THREE.Octree( {
     octree = new OctreeParticle( {
         // uncomment below to see the octree (may kill the fps)
