@@ -121,6 +121,7 @@ function addLine(from, to, branchesObj){
         lineWidth: 2,
         near: camera.near,
         far: camera.far,
+        depthWrite: false,
         blending: THREE.AdditiveBlending
     });
 
@@ -137,17 +138,11 @@ function addLine(from, to, branchesObj){
 
 function buildBranches(){
 
-    var i = 0;
     var branches = new THREE.Object3D();
 
     $.each(octree.objects, function(objIndex, obj) {
 
         obj._source["this@targets"] && $.each(obj._source["this@targets"], function(key, target) {
-
-            if (i > 3)
-                return;
-
-
 
             //objIndex - индекс объекта octree, которые перебираем
             //key - название FK
@@ -155,9 +150,10 @@ function buildBranches(){
             var nodeFrom = octree.objectsData[objIndex];//кто ссылается, включая данные о координатах
 
             var index_to = octree.objectsMap[target];//ищем номер объекта на который ссылаемся
+
             if (!index_to)
                 return;
-            i++;
+
             var nodeTo = octree.objectsData[index_to];//объект, на который ссылаются, включая координаты octree
             //to.object - объект ElasticSearch
 
@@ -287,7 +283,7 @@ function onMouseClick(event) {
             //var mesh = new THREE.Mesh(new THREE.SphereGeometry(val.radius,10,10),new THREE.MeshBasicMaterial({color:0xffffffff}));
             //mesh.position.set(boundingSphere.center.x,boundingSphere.center.y,boundingSphere.center.z);
             //scene.add(mesh);
-            console.log(val.object.key);
+            console.log(val.object);
         }
     });
 }
