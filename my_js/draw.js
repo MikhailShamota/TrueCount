@@ -93,7 +93,7 @@ function parseElements(iterator, weightProperty){
 
 function buildParticles() {
 
-    $.getJSON("response-export-102.json", {async:false,cache:false},function (json) {
+    $.getJSON("ElasticData/response-export-102.json", {async:false,cache:false},function (json) {
 
         var hits = json["hits"].hits;
         var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
@@ -116,12 +116,12 @@ function addLine(from, to, branchesObj){
         color: new THREE.Color(0,1,0),
         transparent:true,
         opacity: 0.2,
-        blending: THREE.AdditiveBlending,
         resolution: canvasSize,
         sizeAttenuation: true,
         lineWidth: 2,
         near: camera.near,
-        far: camera.far
+        far: camera.far,
+        blending: THREE.AdditiveBlending
     });
 
     var geometry = new THREE.Geometry();
