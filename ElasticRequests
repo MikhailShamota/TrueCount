@@ -1,0 +1,25 @@
+{
+  "size":4,
+  "_source" : "this@tablename",
+    "aggs" : {
+        "agg_my" : {
+            "terms" : { "field" : "this@tablename","size":1000}
+        }
+      ,
+        "agg_dispatch": {
+          	"terms" : {"field" : "GM_DISPATCH->dispatchkindid","size":1000}
+        }
+      ,
+        "agg_itemid":{
+                    "terms":{"field":"GM_INVENTTRANS->itemid","size":1000}
+        }
+    }
+}
+
+curl -XPOST 'http://10.40.10.125:9200/ks4/graph/_search' -d '{
+    "size":10000,
+ "query": {
+       "match":{"this@tablename": "GM_Dispatch OR GM_NSIReferenceRecord"}
+    }
+}
+' 1>> /tmp/tmp.json
