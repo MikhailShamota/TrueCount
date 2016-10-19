@@ -1,3 +1,17 @@
+
+{
+  "size":10000,
+  "query": {
+         "match":{"this@tablename": "GM_Dispatch OR GM_NSIReferenceRecord"}
+      },
+    "aggs" : {
+        "agg_my" : {
+            "terms" : { "field" : "this@tablename","size":1000}
+        }
+    }
+}
+
+response-export-agg
 {
   "size":4,
   "_source" : "this@tablename",
@@ -16,6 +30,7 @@
     }
 }
 
+response-export-102
 curl -XPOST 'http://10.40.10.125:9200/ks4/graph/_search' -d '{
     "size":10000,
  "query": {

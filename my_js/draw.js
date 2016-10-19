@@ -5,13 +5,15 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 var gravityCenters = {};
-var worldRadius = 500;//размер области отрисовки
+//var worldRadius = 500;//размер области отрисовки
+var biggestGravitySize = 0;
 var defaultParticleSize = 2;
+var particleDensityDivided = 3;// - обратная величина плотности = 1/p
 
 init();
 paintGL();
 
-function setPartice(num, positions, sizes, obj, size, gravity) {
+function setParticle(num, positions, sizes, obj, size, gravity) {
 
     if (!gravity)
         throw new Error("no gravity found");
@@ -64,23 +66,37 @@ function addParticles(positions, sizes) {
     scene.add(particles);
 }
 
-function setGravity(obj, gravitySourceField) {
+function setGravity(obj, gravitySourceField, size) {
 
-    var gravityId = obj["_source"][gravitySourceField]|| THREE.Math.generateUUID();
+    var gravityId = obj[gravitySourceField] || obj["_source"][gravitySourceField] || THREE.Math.generateUUID();
+    gravityId = gravityId.toUpperCase();
     var gravity = gravityCenters[gravityId];
     if (!gravity) {
 
         //TODO:распределять их так, чтобы не пересекались (касались?)
-        var center = getRandPosInSphere(v3Zero, worldRadius);
+        var center = getRandPosInSphere(v3Zero, biggestGravitySize * 10);
 
-        gravity = {position: center, radius: 0, count:0, id:gravityId, field:gravitySourceField};
+        gravity = {
+            position: center,
+            radius: size,
+            count: 0,
+            id: gravityId,
+            field: gravitySourceField
+        };
 
         gravityCenters[gravityId] = gravity;
+
+        biggestGravitySize = biggestGravitySize > size ? biggestGravitySize : size;
     }
     gravity.count++;
-    gravity.radius = Math.sqrt(gravity.count * defaultParticleSize) * 2;
+    //gravity.radius = Math.sqrt(gravity.count * defaultParticleSize) * 2;
 
     return gravity;
+}
+
+function weight2volume(weight) {
+
+    return Math.cbrt(weight) * particleDensityDivided;
 }
 
 function parseElements(iterator, weightProperty, gravitySourceField) {
@@ -93,20 +109,20 @@ function parseElements(iterator, weightProperty, gravitySourceField) {
     var positions = new Float32Array(count * 3);
 
     var size;
-    var weight;//default
-    var sizeScale;
+    var volume;
+    //var sizeScale;
 
     var i = 0;
 
     $.each(iterator, function (key, val) {
 
-        var gravity = setGravity(val, gravitySourceField);
+        volume = weight2volume(weightProperty && val[weightProperty]) || 1;//вес точки
+        //sizeScale = i == 0 ? defaultParticleSize / weight : sizeScale;//i==0 первое значение в выборке самое большое
+        //size = weight * sizeScale;
+        size = volume * defaultParticleSize;
 
-        weight = (weightProperty && val[weightProperty]) || 1;//вес точки
-        sizeScale = i == 0 ? defaultParticleSize / weight : sizeScale;//i==0 первое значение в выборке самое большое
-        size = weight * sizeScale;
-
-        setPartice(i, positions, sizes, val, size, gravity);
+        var gravity = setGravity(val, gravitySourceField, size);
+        setParticle(i, positions, sizes, val, size, gravity);
 
         i++;
     });
@@ -116,13 +132,13 @@ function parseElements(iterator, weightProperty, gravitySourceField) {
 
 function buildParticles() {
 
-    $.getJSON("ElasticData/response-export-102.json", {async:false,cache:false},function (json) {
+    $.getJSON("ElasticData/response-export-agg-10.json", {async:false,cache:false},function (json) {
 
         var hits = json["hits"].hits;
         var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
+        parseElements(agg, "doc_count", "key");
         parseElements(hits, null, "this@tablename");
-        parseElements(agg, "doc_count", null);
 
         buildBranches();
     });
@@ -175,7 +191,10 @@ function buildBranches() {
 
     $.each(octree.objects, function(objIndex, obj) {
 
-        obj._source["this@targets"] && $.each(obj._source["this@targets"], function(key, target) {
+        if (!obj._source || !obj._source["this@targets"])
+            return;
+
+        $.each(obj._source["this@targets"], function(key, target) {
 
             //objIndex - индекс объекта octree, которые перебираем
             //key - название FK
