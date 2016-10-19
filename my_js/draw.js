@@ -5,10 +5,13 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 var gravityCenters = {};
+var gravityCentersCenter = v3Zero.clone();
+var gravityCentersRadius = 0;
+var gravityCentersSpacing = 150;
 //var worldRadius = 500;//размер области отрисовки
-var biggestGravitySize = 0;
+//var biggestGravitySize = 0;
 var defaultParticleSize = 2;
-var particleDensityDivided = 3;// - обратная величина плотности = 1/p
+//var particleDensityDivided = 3;// - обратная величина плотности = 1/p
 
 init();
 paintGL();
@@ -66,37 +69,35 @@ function addParticles(positions, sizes) {
     scene.add(particles);
 }
 
-function setGravity(obj, gravitySourceField, size) {
+function setGravity(obj, gravitySourceField, r) {
 
     var gravityId = obj[gravitySourceField] || obj["_source"][gravitySourceField] || THREE.Math.generateUUID();
     gravityId = gravityId.toUpperCase();
     var gravity = gravityCenters[gravityId];
     if (!gravity) {
 
-        //TODO:распределять их так, чтобы не пересекались (касались?)
-        var center = getRandPosInSphere(v3Zero, biggestGravitySize * 10);
+        var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
+        gravityCentersRadius = r + gravityCentersRadius + gravityCentersSpacing;//R+r+delta
+        gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
 
         gravity = {
             position: center,
-            radius: size,
+            radius: r,
             count: 0,
             id: gravityId,
             field: gravitySourceField
         };
 
         gravityCenters[gravityId] = gravity;
-
-        biggestGravitySize = biggestGravitySize > size ? biggestGravitySize : size;
     }
     gravity.count++;
-    //gravity.radius = Math.sqrt(gravity.count * defaultParticleSize) * 2;
 
     return gravity;
 }
 
 function weight2volume(weight) {
 
-    return Math.cbrt(weight) * particleDensityDivided;
+    return Math.cbrt(weight);// * particleDensityDivided;
 }
 
 function parseElements(iterator, weightProperty, gravitySourceField) {

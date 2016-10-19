@@ -28,3 +28,8 @@ function getRandPosOnSphere(center, radius) {
 
     return getRandomUnitVector().multiplyScalar(radius).add(center);
 }
+
+function getAnySpherePosNearby(existSphereCenter, existSphereRadius, newSphereRadius) {
+
+    return getRandPosOnSphere(existSphereCenter, existSphereRadius + newSphereRadius);
+}
