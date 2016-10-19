@@ -23,13 +23,14 @@
         }
 
         //this.addObjectData(data, node);//-->
-    }
+    };
 
     OctreeParticle.prototype.addObjectData = function (object, part) {
 
         var objectData = new THREE.OctreeObjectData(object, part.vertex);
         objectData.radius = part.radius;
         objectData.position.copy(objectData.vertices);
+        objectData.gravityId = part.gravityId;
 
         // add to tree objects data list
         this.objectsData.push(objectData);

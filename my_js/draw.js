@@ -5,25 +5,27 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 var gravityCenters = {};
-var worldRadius = 250;//размер области отрисовки
+var worldRadius = 500;//размер области отрисовки
+var defaultParticleSize = 2;
 
 init();
 paintGL();
 
-function setPartice(num, positions, sizes, obj, size, boundingSphere) {
+function setPartice(num, positions, sizes, obj, size, gravity) {
 
+    if (!gravity)
+        throw new Error("no gravity found");
 
-    var vertex = new THREE.Vector3();
-    vertex.x = (Math.random() * 2 - 1) * boundingSphere.radius + boundingSphere.center.x;
-    vertex.y = (Math.random() * 2 - 1) * boundingSphere.radius + boundingSphere.center.y;
-    vertex.z = (Math.random() * 2 - 1) * boundingSphere.radius + boundingSphere.center.z;
+    var vertex = getRandPosOnSphere(gravity.position, gravity.radius);
+
     vertex.toArray(positions, num * 3);
 
     sizes[num] = size;
 
     var node = {
         vertex: vertex,
-        radius: size
+        radius: size,
+        gravityId: gravity.id
     };
 
     octree.addDeferred(obj, "_id", node);
@@ -65,18 +67,21 @@ function addParticles(positions, sizes) {
 function setGravity(obj, gravitySourceField) {
 
     var gravityId = obj["_source"][gravitySourceField]|| THREE.Math.generateUUID();
-    if (!gravityCenters[gravityId]) {
+    var gravity = gravityCenters[gravityId];
+    if (!gravity) {
 
         //TODO:распределять их так, чтобы не пересекались (касались?)
-        var center = new THREE.Vector3();
-        center.x = (Math.random() * 2 - 1) * worldRadius;
-        center.y = (Math.random() * 2 - 1) * worldRadius;
-        center.z = (Math.random() * 2 - 1) * worldRadius;
-        gravityCenters[gravityId] = {position: center, count:0};
-    }
-    gravityCenters[gravityId].count++;
-}
+        var center = getRandPosInSphere(v3Zero, worldRadius);
 
+        gravity = {position: center, radius: 0, count:0, id:gravityId, field:gravitySourceField};
+
+        gravityCenters[gravityId] = gravity;
+    }
+    gravity.count++;
+    gravity.radius = Math.sqrt(gravity.count * defaultParticleSize) * 2;
+
+    return gravity;
+}
 
 function parseElements(iterator, weightProperty, gravitySourceField) {
 
@@ -87,24 +92,21 @@ function parseElements(iterator, weightProperty, gravitySourceField) {
     var sizes = new Float32Array(count);
     var positions = new Float32Array(count * 3);
 
-    var biggest_size_k = 0.002;//максимальный элемент занимает world_radius * k
-    var boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), worldRadius);
-
     var size;
-    var weight = 20;//default
+    var weight;//default
     var sizeScale;
 
     var i = 0;
 
     $.each(iterator, function (key, val) {
 
-        setGravity(val, gravitySourceField);
+        var gravity = setGravity(val, gravitySourceField);
 
-        weight = weightProperty && val[weightProperty] ? val[weightProperty] : weight;//радиус вписанной окружности точки
-        sizeScale = i == 0 ? biggest_size_k * worldRadius / weight : sizeScale;//первое значение в выборке самое большое
+        weight = (weightProperty && val[weightProperty]) || 1;//вес точки
+        sizeScale = i == 0 ? defaultParticleSize / weight : sizeScale;//i==0 первое значение в выборке самое большое
         size = weight * sizeScale;
 
-        setPartice(i, positions, sizes, val, size, boundingSphere);
+        setPartice(i, positions, sizes, val, size, gravity);
 
         i++;
     });
@@ -131,24 +133,33 @@ function addLine(from, to, branchesObj) {
     var v1 = from.position;
     var v2 = to.position;
 
+    var g1 = gravityCenters[from.gravityId];
+    var g2 = gravityCenters[to.gravityId];
+    var from_to = g2.position.clone().sub(g1.position);
+
+    var v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
+
     var canvasSize = new THREE.Vector2(renderer.context.canvas.width, renderer.context.canvas.height);
 
     var material = new THREE.MeshLineMaterial( {
         useMap: false,
         color: new THREE.Color(0,1,0),
         transparent:true,
-        opacity: 0.2,
+        opacity: 0.3,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 2,
+        lineWidth: 3,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
         blending: THREE.AdditiveBlending
     });
 
+    var curve = new THREE.QuadraticBezierCurve3 (v1, v3, v2);
     var geometry = new THREE.Geometry();
-    geometry.vertices.push(v1, v2);
+    geometry.vertices = curve.getPoints(20);
+
+    //geometry.vertices.push(v1, v2);//straight line
 
     var line = new THREE.MeshLine();
     line.setGeometry(geometry);
