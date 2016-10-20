@@ -4,13 +4,16 @@
 var stats, controls;
 var camera, scene, renderer;
 var octree;
+
 var gravityCenters = {};
 var gravityCentersCenter = v3Zero.clone();
 var gravityCentersRadius = 0;
-var gravityCentersSpacing = 150;
+var gravityCentersSpacing = 1.5;//радиусов дополнительно между сферами
+var gravityDocumentsDensity = 0.1;//плотность документов
+
 //var worldRadius = 500;//размер области отрисовки
 //var biggestGravitySize = 0;
-var defaultParticleSize = 2;
+var defaultDocumentSize = 2;
 //var particleDensityDivided = 3;// - обратная величина плотности = 1/p
 
 init();
@@ -36,7 +39,7 @@ function setParticle(num, positions, sizes, obj, size, gravity) {
     octree.addDeferred(obj, "_id", node);
 }
 
-function addParticles(positions, sizes) {
+function drawParticles(positions, sizes) {
 
     //var textureLoader = new THREE.TextureLoader();
     //var tex = textureLoader.load("2.png");//THREE.ImageUtils.loadTexture("1.jpg"),
@@ -69,15 +72,15 @@ function addParticles(positions, sizes) {
     scene.add(particles);
 }
 
-function setGravity(obj, gravitySourceField, r) {
+function setGravity(obj, groupBy, r) {
 
-    var gravityId = obj[gravitySourceField] || obj["_source"][gravitySourceField] || THREE.Math.generateUUID();
+    var gravityId = obj[groupBy] || obj["_source"][groupBy] || THREE.Math.generateUUID();
     gravityId = gravityId.toUpperCase();
     var gravity = gravityCenters[gravityId];
     if (!gravity) {
 
         var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
-        gravityCentersRadius = r + gravityCentersRadius + gravityCentersSpacing;//R+r+delta
+        gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
         gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
 
         gravity = {
@@ -85,7 +88,7 @@ function setGravity(obj, gravitySourceField, r) {
             radius: r,
             count: 0,
             id: gravityId,
-            field: gravitySourceField
+            field: groupBy
         };
 
         gravityCenters[gravityId] = gravity;
@@ -100,7 +103,7 @@ function weight2volume(weight) {
     return Math.cbrt(weight);// * particleDensityDivided;
 }
 
-function parseElements(iterator, weightProperty, gravitySourceField) {
+function doSelect(iterator, weightBy, groupBy) {
 
     if (!iterator)
         return;
@@ -109,43 +112,96 @@ function parseElements(iterator, weightProperty, gravitySourceField) {
     var sizes = new Float32Array(count);
     var positions = new Float32Array(count * 3);
 
-    var size;
-    var volume;
-    //var sizeScale;
+
+    var volume;//объем частицы в зависимости от значения поля
+    var size;//радиус частицы
+    var sizeScale;//масштаб частицы
 
     var i = 0;
 
     $.each(iterator, function (key, val) {
 
-        volume = weight2volume(weightProperty && val[weightProperty]) || 1;//вес точки
-        //sizeScale = i == 0 ? defaultParticleSize / weight : sizeScale;//i==0 первое значение в выборке самое большое
-        //size = weight * sizeScale;
-        size = volume * defaultParticleSize;
+        volume = weight2volume(weightBy && val[weightBy]) || 1;//вес точки
 
-        var gravity = setGravity(val, gravitySourceField, size);
+        sizeScale = i == 0 ? defaultDocumentSize / volume : sizeScale;//i==0 первое значение в выборке самое большое
+
+        size = volume * defaultDocumentSize * sizeScale;
+
+        var gravity = setGravity(val, groupBy, size);
+
         setParticle(i, positions, sizes, val, size, gravity);
 
         i++;
     });
 
-    addParticles(positions,sizes);
+    drawParticles(positions,sizes);
 }
 
-function buildParticles() {
+function doDisperse(aggregator, weightBy, groupBy) {
+
+    if (!aggregator)
+        return;
+
+    $.each(aggregator, function (key, val) {
+
+        var volume = weight2volume(weightBy && val[weightBy]) || 0;//сторона куба для вмещения всех точек
+        var size = volume * defaultDocumentSize / gravityDocumentsDensity;//итоговый размер области
+
+        setGravity(val, groupBy, size);
+    });
+}
+
+function initData() {
+
+    var socket = io("http://172.20.0.121:3228");
+
+    //connect событие при подключении
+    socket.on("connect", function() {
+        //get_graph событие для сервера и объект-запрос к эластику
+        socket.emit("get_graph",
+            {
+                "size": 1000,
+                "query": {
+                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
+                },
+                "aggs": {
+                    "agg_my": {
+                        "terms": {"field": "this@tablename", "size": 1000}
+                    }
+                }
+            }
+        );
+
+        socket.on("graph", function(json) {
+            //receivedGraph - тот же формат, что и обычно, но без ограничения по размеру
+            //do some work here...
+           // console.log(json);
+
+            var hits = json["hits"].hits;
+            var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
+
+            doDisperse(agg, "doc_count", "key");//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
+            doSelect(hits, "GM_DISPATCH->tariff", "this@tablename");
+            doLink();
+
+        });
+
+    });
+/*
 
     $.getJSON("ElasticData/response-export-agg-10.json", {async:false,cache:false},function (json) {
 
         var hits = json["hits"].hits;
         var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-        parseElements(agg, "doc_count", "key");
-        parseElements(hits, null, "this@tablename");
-
-        buildBranches();
+        doDisperse(agg, "doc_count", "key");//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
+        doSelect(hits, "GM_DISPATCH->tariff", "this@tablename");
+        doLink();
     });
+*/
 }
 
-function addLine(from, to, branchesObj) {
+function drawLine(from, to, branchesObj) {
 
     var v1 = from.position;
     var v2 = to.position;
@@ -160,12 +216,12 @@ function addLine(from, to, branchesObj) {
 
     var material = new THREE.MeshLineMaterial( {
         useMap: false,
-        color: new THREE.Color(0,1,0),
+        color: new THREE.Color(0.01,0.5,0.01),
         transparent:true,
-        opacity: 0.3,
+        opacity: 0.1,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 3,
+        lineWidth: 4,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -186,7 +242,7 @@ function addLine(from, to, branchesObj) {
     branchesObj.add(mesh);
 }
 
-function buildBranches() {
+function doLink() {
 
     var branches = new THREE.Object3D();
 
@@ -210,7 +266,7 @@ function buildBranches() {
             var nodeTo = octree.objectsData[index_to];//объект, на который ссылаются, включая координаты octree
             //to.object - объект ElasticSearch
 
-            addLine(nodeFrom, nodeTo, branches);
+            drawLine(nodeFrom, nodeTo, branches);
         });
     });
 
@@ -229,7 +285,7 @@ function initializeGL() {
     var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(75, window.width / window.height, 0.1, 10000);
-    camera.position.z = 750;
+    camera.position.z = 7500;
     camera.aspect = WIDTH / HEIGHT;
     camera.updateProjectionMatrix();
 
@@ -346,7 +402,7 @@ function init() {
     initStats();
     initControls();
     initOctree();
-    buildParticles();
+    initData();
 }
 
 function paintGL() {
