@@ -9,22 +9,20 @@ var gravityCenters = {};
 var gravityCentersCenter = v3Zero.clone();
 var gravityCentersRadius = 0;
 var gravityCentersSpacing = 1.5;//радиусов дополнительно между сферами
-var gravityDocumentsDensity = 0.1;//плотность документов
+var defaultGravityDensity = 0.1;//плотность документов в гравитации - влияет на объем при фиксированном размере документа
 
-//var worldRadius = 500;//размер области отрисовки
-//var biggestGravitySize = 0;
-var defaultDocumentSize = 2;
-//var particleDensityDivided = 3;// - обратная величина плотности = 1/p
+var defaultDocumentDensity = 1;//плотность документов - чем выше плотность документа, тем меньше его размер
+var defaultDocumentSize = 2;//базовый размер документов
 
 init();
 paintGL();
 
-function setParticle(num, positions, sizes, obj, size, gravity) {
+function setParticle(num, positions, sizes, obj, size, gravity, posMethod) {
 
     if (!gravity)
         throw new Error("no gravity found");
 
-    var vertex = getRandPosOnSphere(gravity.position, gravity.radius);
+    var vertex = posMethod(gravity.position, gravity.radius);
 
     vertex.toArray(positions, num * 3);
 
@@ -72,13 +70,20 @@ function drawParticles(positions, sizes) {
     scene.add(particles);
 }
 
-function setGravity(obj, groupBy, r) {
+function getFieldValue(obj, field) {
 
-    var gravityId = obj[groupBy] || obj["_source"][groupBy] || THREE.Math.generateUUID();
-    gravityId = gravityId.toUpperCase();
+    return obj[field] || obj["_source"][field];
+}
+
+function setGravity(gravityId, size) {
+
+    //var gravityId = obj[groupBy] || obj["_source"][groupBy] || THREE.Math.generateUUID();
+    gravityId = gravityId.toUpperCase()
     var gravity = gravityCenters[gravityId];
+
     if (!gravity) {
 
+        var r = size;
         var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
         gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
         gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
@@ -87,12 +92,12 @@ function setGravity(obj, groupBy, r) {
             position: center,
             radius: r,
             count: 0,
-            id: gravityId,
-            field: groupBy
+            id: gravityId
         };
 
         gravityCenters[gravityId] = gravity;
     }
+
     gravity.count++;
 
     return gravity;
@@ -100,10 +105,10 @@ function setGravity(obj, groupBy, r) {
 
 function weight2volume(weight) {
 
-    return Math.cbrt(weight);// * particleDensityDivided;
+    return Math.cbrt(weight);
 }
 
-function doSelect(iterator, weightBy, groupBy) {
+function doSelect(iterator, groupBy, weightBy, posMethod, density) {
 
     if (!iterator)
         return;
@@ -114,42 +119,61 @@ function doSelect(iterator, weightBy, groupBy) {
 
 
     var volume;//объем частицы в зависимости от значения поля
-    var size;//радиус частицы
-    var sizeScale;//масштаб частицы
+    var size;//размер частицы
+    //var sizeScale;//масштаб частицы
 
     var i = 0;
 
     $.each(iterator, function (key, val) {
 
-        volume = weight2volume(weightBy && val[weightBy]) || 1;//вес точки
+        volume = weight2volume(getFieldValue(val, weightBy)) || 1;//вес точки
 
-        sizeScale = i == 0 ? defaultDocumentSize / volume : sizeScale;//i==0 первое значение в выборке самое большое
+        //sizeScale = i == 0 ? defaultDocumentSize / volume : sizeScale;//i==0 первое значение в выборке самое большое
 
-        size = volume * defaultDocumentSize * sizeScale;
+        size = volume * defaultDocumentSize / density;// * sizeScale;
 
-        var gravity = setGravity(val, groupBy, size);
+        var gravityId = getFieldValue(val, groupBy) || '';
 
-        setParticle(i, positions, sizes, val, size, gravity);
+        setParticle(
+            i,
+            positions,
+            sizes,
+            val,
+            size,
+            setGravity(gravityId, size),
+            posMethod
+        );
 
         i++;
     });
 
-    drawParticles(positions,sizes);
+    drawParticles(positions, sizes);
+    doLink();
 }
 
-function doDisperse(aggregator, weightBy, groupBy) {
+/*function doGroupBy(aggregator, countBy, groupBy) {
 
     if (!aggregator)
         return;
 
+    var i = 0;
     $.each(aggregator, function (key, val) {
 
-        var volume = weight2volume(weightBy && val[weightBy]) || 0;//сторона куба для вмещения всех точек
-        var size = volume * defaultDocumentSize / gravityDocumentsDensity;//итоговый размер области
+        var volume = weight2volume(countBy && val[countBy]) || 0;//сторона куба для вмещения всех точек
+        var size = volume * defaultDocumentSize / defaultGravityDensity;//итоговый размер области
 
-        setGravity(val, groupBy, size);
+        setGravity(
+            getFieldValue(val, groupBy),//gravityId
+            size
+        );
+
+        i++;
     });
-}
+}*/
+
+/*function load(groupBy, weightBy, ) {
+
+}*/
 
 function initData() {
 
@@ -162,7 +186,7 @@ function initData() {
             {
                 "size": 1000,
                 "query": {
-                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
+                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
                 },
                 "aggs": {
                     "agg_my": {
@@ -180,10 +204,10 @@ function initData() {
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            doDisperse(agg, "doc_count", "key");//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
-            doSelect(hits, "GM_DISPATCH->tariff", "this@tablename");
-            doLink();
-
+            //doDisperse(agg, "doc_count", "key");//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
+            doSelect(agg, "key", "doc_count", getCenterInSphere, defaultGravityDensity);//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
+            doSelect(hits, "this@tablename", "GM_DISPATCH->totalamount", getRandPosOnSphere, defaultDocumentDensity);
+            //doLink();
         });
 
     });
@@ -216,7 +240,7 @@ function drawLine(from, to, branchesObj) {
 
     var material = new THREE.MeshLineMaterial( {
         useMap: false,
-        color: new THREE.Color(0.01,0.5,0.01),
+        color: new THREE.Color(0.1,0.4,0.1),
         transparent:true,
         opacity: 0.1,
         resolution: canvasSize,
@@ -240,6 +264,14 @@ function drawLine(from, to, branchesObj) {
     var mesh = new THREE.Mesh(line.geometry, material);
 
     branchesObj.add(mesh);
+
+    /*var material2 = new THREE.LineBasicMaterial({
+        color: 0x0000ff
+    });
+    var geometry2 = new THREE.Geometry();
+    geometry2.vertices.push(v1, v2);
+    var line2 = new THREE.Line( geometry2, material2 );
+    scene.add(line2)*/
 }
 
 function doLink() {

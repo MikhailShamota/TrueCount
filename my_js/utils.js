@@ -24,6 +24,11 @@ function getRandPosInSphere(center, radius) {
     return getRandomUnitVector().multiplyScalar(Math.random() * radius).add(center);
 }
 
+function getCenterInSphere(center, radius) {
+
+    return center;
+}
+
 function getRandPosOnSphere(center, radius) {
 
     return getRandomUnitVector().multiplyScalar(radius).add(center);
