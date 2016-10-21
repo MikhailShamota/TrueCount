@@ -12,7 +12,7 @@
     OctreeParticle.prototype.addDeferred = function (data, idProperty, node) {
 
         var id = data[idProperty];
-        if (!this.objectsMap[id]) {
+        if (!id|| !this.objectsMap[id]) {
 
             this.objects.push(data);
 

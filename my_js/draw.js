@@ -12,7 +12,7 @@ var gravityCentersSpacing =  1.5;//радиусов дополнительно �
 var defaultGravityDensity = 0.1;//плотность документов в гравитации - влияет на объем при фиксированном размере документа
 
 var defaultDocumentDensity = 1;//плотность документов - чем выше плотность документа, тем меньше его размер
-var defaultDocumentSize = 2;//базовый размер документов
+var defaultDocumentSize = 0.2;//базовый размер документов
 
 init();
 paintGL();
@@ -23,6 +23,9 @@ function setParticle(num, positions, sizes, obj, size, gravity, posMethod) {
         throw new Error("no gravity found");
 
     var vertex = posMethod(gravity.position, gravity.radius);
+
+    if (!vertex)
+        return;
 
     vertex.toArray(positions, num * 3);
 
@@ -75,7 +78,7 @@ function getFieldValue(obj, field) {
     return obj[field] || obj["_source"][field];
 }
 
-function setGravity(gravityId, size) {
+function setGravity(gravityId, r) {
 
     //var gravityId = obj[groupBy] || obj["_source"][groupBy] || THREE.Math.generateUUID();
     gravityId = gravityId.toUpperCase()
@@ -83,7 +86,7 @@ function setGravity(gravityId, size) {
 
     if (!gravity) {
 
-        var r = size;
+
         var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
         gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
         gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
@@ -184,7 +187,7 @@ function initData(payload) {
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            doSelect(agg, "key", "doc_count", getCenterInSphere, defaultGravityDensity);
+            doSelect(agg, "key", "doc_count", getCenterInSphere/*getNoPosition*/, defaultGravityDensity);
             doSelect(hits, "this@tablename", "GM_DISPATCH->totalamount", getRandPosOnSphere, defaultDocumentDensity);
         });
 
@@ -223,7 +226,7 @@ function drawLine(from, to, branchesObj) {
         opacity: 0.1,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 4,
+        lineWidth: 0.4,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -295,7 +298,7 @@ function initializeGL() {
     var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(75, window.width / window.height, 0.1, 1000000);
-    camera.position.z = 7500;
+    camera.position.z = 750;
     camera.aspect = WIDTH / HEIGHT;
     camera.updateProjectionMatrix();
 

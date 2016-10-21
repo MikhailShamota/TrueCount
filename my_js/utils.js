@@ -38,3 +38,7 @@ function getAnySpherePosNearby(existSphereCenter, existSphereRadius, newSphereRa
 
     return getRandPosOnSphere(existSphereCenter, existSphereRadius + newSphereRadius);
 }
+
+function getNoPosition() {
+
+}
