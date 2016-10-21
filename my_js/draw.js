@@ -8,7 +8,7 @@ var octree;
 var gravityCenters = {};
 var gravityCentersCenter = v3Zero.clone();
 var gravityCentersRadius = 0;
-var gravityCentersSpacing = 1.5;//радиусов дополнительно между сферами
+var gravityCentersSpacing =  1.5;//радиусов дополнительно между сферами
 var defaultGravityDensity = 0.1;//плотность документов в гравитации - влияет на объем при фиксированном размере документа
 
 var defaultDocumentDensity = 1;//плотность документов - чем выше плотность документа, тем меньше его размер
@@ -151,50 +151,30 @@ function doSelect(iterator, groupBy, weightBy, posMethod, density) {
     doLink();
 }
 
-/*function doGroupBy(aggregator, countBy, groupBy) {
-
-    if (!aggregator)
-        return;
-
-    var i = 0;
-    $.each(aggregator, function (key, val) {
-
-        var volume = weight2volume(countBy && val[countBy]) || 0;//сторона куба для вмещения всех точек
-        var size = volume * defaultDocumentSize / defaultGravityDensity;//итоговый размер области
-
-        setGravity(
-            getFieldValue(val, groupBy),//gravityId
-            size
-        );
-
-        i++;
-    });
-}*/
-
-/*function load(groupBy, weightBy, ) {
-
-}*/
-
-function initData() {
+function initData(payload) {
 
     var socket = io("http://172.20.0.121:3228");
+
+    /*
+    var payload = {
+
+        "size": 1000,
+        "query": {
+            "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
+        },
+        "aggs": {
+            "agg_my": {
+                "terms": {"field": "this@tablename", "size": 1000}
+            }
+        }
+    }
+    */
+    //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
     //connect событие при подключении
     socket.on("connect", function() {
         //get_graph событие для сервера и объект-запрос к эластику
-        socket.emit("get_graph",
-            {
-                "size": 1000,
-                "query": {
-                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
-                },
-                "aggs": {
-                    "agg_my": {
-                        "terms": {"field": "this@tablename", "size": 1000}
-                    }
-                }
-            }
-        );
+        socket.emit("get_graph", payload);
 
         socket.on("graph", function(json) {
             //receivedGraph - тот же формат, что и обычно, но без ограничения по размеру
@@ -204,10 +184,8 @@ function initData() {
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            //doDisperse(agg, "doc_count", "key");//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
-            doSelect(agg, "key", "doc_count", getCenterInSphere, defaultGravityDensity);//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
+            doSelect(agg, "key", "doc_count", getCenterInSphere, defaultGravityDensity);
             doSelect(hits, "this@tablename", "GM_DISPATCH->totalamount", getRandPosOnSphere, defaultDocumentDensity);
-            //doLink();
         });
 
     });
@@ -316,7 +294,7 @@ function initializeGL() {
     scene = new THREE.Scene();
     var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
-    camera = new THREE.PerspectiveCamera(75, window.width / window.height, 0.1, 10000);
+    camera = new THREE.PerspectiveCamera(75, window.width / window.height, 0.1, 1000000);
     camera.position.z = 7500;
     camera.aspect = WIDTH / HEIGHT;
     camera.updateProjectionMatrix();
@@ -434,7 +412,24 @@ function init() {
     initStats();
     initControls();
     initOctree();
-    initData();
+
+    initData(
+
+
+            {
+
+                "size": 1000,
+                "query": {
+                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
+                },
+                "aggs": {
+                    "agg_my": {
+                        "terms": {"field": "this@tablename", "size": 1000}
+                    }
+                }
+            }
+
+    );
 }
 
 function paintGL() {
