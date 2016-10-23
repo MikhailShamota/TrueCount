@@ -17,15 +17,15 @@ var defaultDocumentSize = 0.2;//базовый размер документов
 init();
 paintGL();
 
-function setParticle(num, positions, sizes, obj, size, gravity, posMethod) {
+function setParticle(num, positions, sizes, obj, size, parent) {
 
-    if (!gravity)
+    if (!parent)
         throw new Error("no gravity found");
 
-    var vertex = posMethod(gravity.position, gravity.radius);
+    var vertex = getRandPosOnSphere(parent.position, parent.size);
 
     if (!vertex)
-        return;
+        return new Error("can't create vertex");
 
     vertex.toArray(positions, num * 3);
 
@@ -34,10 +34,32 @@ function setParticle(num, positions, sizes, obj, size, gravity, posMethod) {
     var node = {
         vertex: vertex,
         radius: size,
-        gravityId: gravity.id
+        parent: parent
     };
 
     octree.addDeferred(obj, "_id", node);
+}
+
+function setParticle2(num, positions, sizes, obj, size, parent) {
+
+    var vertex = getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0);
+
+    if (!positions || !sizes)
+        return vertex;
+
+    vertex.toArray(positions, num * 3);
+
+    sizes[num] = size;
+
+    var node = {
+        vertex: vertex,
+        radius: size,
+        parent: parent
+    };
+
+    octree.addDeferred(obj, "_id", node);
+
+    return vertex;
 }
 
 function drawParticles(positions, sizes) {
@@ -75,7 +97,7 @@ function drawParticles(positions, sizes) {
 
 function getFieldValue(obj, field) {
 
-    return obj[field] || obj["_source"][field];
+    return field && (obj[field] || obj["_source"][field]);
 }
 
 function setGravity(gravityId, r) {
@@ -85,7 +107,6 @@ function setGravity(gravityId, r) {
     var gravity = gravityCenters[gravityId];
 
     if (!gravity) {
-
 
         var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
         gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
@@ -108,7 +129,72 @@ function setGravity(gravityId, r) {
 
 function weight2volume(weight) {
 
-    return Math.cbrt(weight);
+    return Math.cbrt(weight) * defaultDocumentSize / defaultDocumentDensity;
+}
+
+function doSelect2(iterator, fieldId, fieldParentId, fieldWeight, parents) {
+
+    if (!iterator)
+        return;
+
+    var count = iterator.length || 0;
+    var sizes = new Float32Array(count);
+    var positions = new Float32Array(count * 3);
+
+    var elements = {};
+
+    //var volume;//объем частицы в зависимости от значения поля
+    //var size;//размер частицы
+    //var sizeScale;//масштаб частицы
+
+    var i = 0;
+
+    $.each(iterator, function (key, val) {
+
+        var weight = getFieldValue(val, fieldWeight);
+        var id = getFieldValue(val, fieldId) || '';
+        id = id.toUpperCase();
+        if (parents) {
+
+            var parentId = getFieldValue(val, fieldParentId) || '';
+            parentId = parentId.toUpperCase();
+            var parent = parents[parentId];
+
+            if (!parent)
+                throw new Error("No parent found");
+        }
+
+        var size = weight2volume(weight) || 1;//вес точки
+
+        //sizeScale = i == 0 ? defaultDocumentSize / volume : sizeScale;//i==0 первое значение в выборке самое большое
+
+        //size = volume;//* defaultDocumentSize / defaultDocumentDensity;// * sizeScale;
+
+        if (elements[id])
+            return;
+
+        elements[id] = {
+            id: id,
+            parentId: parent && parent.id,
+            size: size,
+            position: setParticle2(
+                i,
+                positions,
+                sizes,
+                val,
+                size,
+                parent
+            )
+        };
+
+        i++;
+
+    });
+
+    drawParticles(positions, sizes);
+    doLink();
+
+    return elements;
 }
 
 function doSelect(iterator, groupBy, weightBy, posMethod, density) {
@@ -180,15 +266,21 @@ function initData(payload) {
         socket.emit("get_graph", payload);
 
         socket.on("graph", function(json) {
-            //receivedGraph - тот же формат, что и обычно, но без ограничения по размеру
-            //do some work here...
-           // console.log(json);
 
+            var hits_total = json["hits"];
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            doSelect(agg, "key", "doc_count", getCenterInSphere/*getNoPosition*/, defaultGravityDensity);
-            doSelect(hits, "this@tablename", "GM_DISPATCH->totalamount", getRandPosOnSphere, defaultDocumentDensity);
+            //doSelect(agg, "key", "doc_count", getCenterInSphere/*getNoPosition*/, defaultGravityDensity);
+            //doSelect(hits, "this@tablename", "GM_DISPATCH->totalamount", getRandPosOnSphere, defaultDocumentDensity);
+            //var world = {id:'',parentid:'',position:v3Zero.clone(),size:weight2volume(agg.length)};
+            var root = {};
+            //var sizes = new Float32Array(1);
+            //var positions = new Float32Array(1 * 3);
+            //doObject(null, root, "", null, agg.length, null, null);
+            var root = doSelect2([hits_total], null, null, "total", null);
+            var gravities = doSelect2(agg, "key", null, "doc_count", root);
+            var documents = doSelect2(hits, "_id", "this@tablename", "GM_DISPATCH->totalamount",gravities);
         });
 
     });
@@ -211,8 +303,8 @@ function drawLine(from, to, branchesObj) {
     var v1 = from.position;
     var v2 = to.position;
 
-    var g1 = gravityCenters[from.gravityId];
-    var g2 = gravityCenters[to.gravityId];
+    var g1 = gravityCenters[from.parent.position];
+    var g2 = gravityCenters[to.parent.position];
     var from_to = g2.position.clone().sub(g1.position);
 
     var v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
@@ -417,6 +509,15 @@ function init() {
     initOctree();
 
     initData(
+       /* {
+
+            "size": 0,
+            "aggs": {
+                "agg_my": {
+                    "terms": {"field": "this@tablename", "size": 1000}
+                }
+            }
+        }*/
 
 
             {
@@ -431,6 +532,7 @@ function init() {
                     }
                 }
             }
+
 
     );
 }

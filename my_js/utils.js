@@ -2,10 +2,10 @@
  * Created by mshamota on 19.10.2016.
  */
 
-var v3Zero = new THREE.Vector3(0, 0, 0);
-var v3UnitX = new THREE.Vector3(1, 0, 0);
-var v3UnitY = new THREE.Vector3(0, 1, 0);
-var v3UnitZ = new THREE.Vector3(0, 0, 1);
+const v3Zero = new THREE.Vector3(0, 0, 0);
+const v3UnitX = new THREE.Vector3(1, 0, 0);
+const v3UnitY = new THREE.Vector3(0, 1, 0);
+const v3UnitZ = new THREE.Vector3(0, 0, 1);
 
 function getRandomUnitVector() {
 

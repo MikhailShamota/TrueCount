@@ -30,7 +30,7 @@
         var objectData = new THREE.OctreeObjectData(object, part.vertex);
         objectData.radius = part.radius;
         objectData.position.copy(objectData.vertices);
-        objectData.gravityId = part.gravityId;
+        objectData.parent = part.parent;
 
         // add to tree objects data list
         this.objectsData.push(objectData);
