@@ -114,11 +114,13 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
         if (into && into[id])
             return;
 
+        var parent;
+
         if (parents) {
 
             var parentId = getFieldValue(val, fieldParentId) || '';
             parentId = parentId.toUpperCase();
-            var parent = parents[parentId];
+            parent = parents[parentId];
 
             if (!parent)
                 throw new Error("No parent found");
@@ -441,7 +443,7 @@ function init() {
 
             {
 
-                "size": 1000,
+                "size": 0,
                 "query": {
                     "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
                 },
