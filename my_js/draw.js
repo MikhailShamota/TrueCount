@@ -6,8 +6,12 @@ var camera, scene, renderer;
 var octree;
 
 
-var worldSize = 500;
-var defaultDensity = 0.6;
+var worldSize = 1000;
+var defaultDensity = 0.4;
+
+
+var root = {};
+var groups = {};
 
 init();
 paintGL();
@@ -79,7 +83,7 @@ function weight2size(weight) {
     return Math.cbrt(weight);// * defaultDocumentSize / defaultDocumentDensity;
 }
 
-function doSelect(iterator, fieldId, fieldParentId, fieldWeight, parents) {
+function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) {
 
     if (!iterator)
         return;
@@ -88,7 +92,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, parents) {
     var sizes = new Float32Array(count);
     var positions = new Float32Array(count * 3);
 
-    var elements = {};
+    //var into = {};
 
     /*
     var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
@@ -106,7 +110,8 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, parents) {
         var weight = getFieldValue(val, fieldWeight);
         var id = getFieldValue(val, fieldId) || '';
         id = id.toUpperCase();
-        if (elements[id])
+
+        if (into && into[id])
             return;
 
         if (parents) {
@@ -126,30 +131,33 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, parents) {
 
         var sizeWeighted = weight && weight2size(weight.length || weight) || 1;//размер на основании веса объекта
 
-        sizeScale = i == 0 ? size / sizeWeighted : sizeScale;//i==0 первое значение в выборке самое большое. масштаб всех элементов итерации
+        if (parent && !parent.sizeScale)
+            parent.sizeScale = size / sizeWeighted;//первое значение в выборке самое большое. масштаб всех элементов группировки
 
-        size = sizeWeighted * sizeScale;//итоговый размер - размер нормализованный по самому больщому элементу (i=0)
+        size = sizeWeighted * (parent && parent.sizeScale || size / sizeWeighted);//итоговый размер - размер нормализованный по самому больщому элементу (i=0)
 
+        var pos = setParticle(
+                                i,
+                                positions,
+                                sizes,
+                                val,
+                                size,
+                                parent
+                             );
 
-        elements[id] = {
+        if (into)
+            into[id] = {
 
-            id: id,
-            index: i,//индекс, порядковый номер элемента внутри геометрии
-            sceneindex: sceneNextId,//индекс, под которым будет в scene.children
-            parentId: parent && parent.id,
-            size: size,
-            childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
-            //childrenCount: 0,
-            visible: true,
-            position: setParticle(
-                i,
-                positions,
-                sizes,
-                val,
-                size,
-                parent
-            )
-        };
+                id: id,
+                index: i,//индекс, порядковый номер элемента внутри геометрии
+                sceneIndex: sceneNextId,//индекс, под которым будет в scene.children
+                parentId: parent && parent.id,
+                size: size,
+                childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
+                //childrenCount: 0,
+                visible: true,
+                position: pos
+            };
 
         i++;
 
@@ -157,8 +165,6 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, parents) {
 
     drawParticles(positions, sizes);
     doLink();
-
-    return elements;
 }
 
 function hideElement(obj) {
@@ -166,7 +172,7 @@ function hideElement(obj) {
     if (!obj || !obj.visible)
         return;
 
-    var geometry = scene.children[obj.sceneindex].geometry;
+    var geometry = scene.children[obj.sceneIndex].geometry;
     var attribute = geometry.attributes["customSize"];
     attribute.array[obj.index] = 0;
     attribute.needsUpdate = true;
@@ -203,9 +209,9 @@ function initData(payload) {
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            var root =      doSelect([topagg],  null,       null,               "buckets",                  null);
-            var gravities = doSelect(agg,       "key",      null,               "doc_count",                root);
-            var documents = doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", gravities);
+            doSelect([topagg],  null,       null,               "buckets",                  root, null);
+            doSelect(agg,       "key",      null,               "doc_count",                groups, root);
+            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", null, groups);
         });
 
     });
@@ -231,7 +237,7 @@ function drawLine(from, to, branchesObj) {
         opacity: 0.1,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 2,
+        lineWidth: 0.8,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -435,9 +441,9 @@ function init() {
 
             {
 
-                "size": 0,
+                "size": 1000,
                 "query": {
-                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
+                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
                 },
                 "sort": {
                     "GM_DISPATCH->totalamount" : "desc"
