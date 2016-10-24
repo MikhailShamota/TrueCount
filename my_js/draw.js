@@ -5,42 +5,14 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 
-var gravityCenters = {};
-var gravityCentersCenter = v3Zero.clone();
-var gravityCentersRadius = 0;
-var gravityCentersSpacing =  1.5;//радиусов дополнительно между сферами
-var defaultGravityDensity = 0.1;//плотность документов в гравитации - влияет на объем при фиксированном размере документа
 
-var defaultDocumentDensity = 1;//плотность документов - чем выше плотность документа, тем меньше его размер
-var defaultDocumentSize = 0.2;//базовый размер документов
+var worldSize = 500;
+var defaultDensity = 0.6;
 
 init();
 paintGL();
 
 function setParticle(num, positions, sizes, obj, size, parent) {
-
-    if (!parent)
-        throw new Error("no gravity found");
-
-    var vertex = getRandPosOnSphere(parent.position, parent.size);
-
-    if (!vertex)
-        return new Error("can't create vertex");
-
-    vertex.toArray(positions, num * 3);
-
-    sizes[num] = size;
-
-    var node = {
-        vertex: vertex,
-        radius: size,
-        parent: parent
-    };
-
-    octree.addDeferred(obj, "_id", node);
-}
-
-function setParticle2(num, positions, sizes, obj, size, parent) {
 
     var vertex = getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0);
 
@@ -66,6 +38,8 @@ function drawParticles(positions, sizes) {
 
     //var textureLoader = new THREE.TextureLoader();
     //var tex = textureLoader.load("2.png");//THREE.ImageUtils.loadTexture("1.jpg"),
+    if (!positions || !sizes)
+        return;
 
     var vShader = $("#NodeVertexShader");
     var fShader = $("#NodeFragmentShader");
@@ -100,39 +74,12 @@ function getFieldValue(obj, field) {
     return field && (obj[field] || obj["_source"][field]);
 }
 
-function setGravity(gravityId, r) {
+function weight2size(weight) {
 
-    //var gravityId = obj[groupBy] || obj["_source"][groupBy] || THREE.Math.generateUUID();
-    gravityId = gravityId.toUpperCase()
-    var gravity = gravityCenters[gravityId];
-
-    if (!gravity) {
-
-        var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
-        gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
-        gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
-
-        gravity = {
-            position: center,
-            radius: r,
-            count: 0,
-            id: gravityId
-        };
-
-        gravityCenters[gravityId] = gravity;
-    }
-
-    gravity.count++;
-
-    return gravity;
+    return Math.cbrt(weight);// * defaultDocumentSize / defaultDocumentDensity;
 }
 
-function weight2volume(weight) {
-
-    return Math.cbrt(weight) * defaultDocumentSize / defaultDocumentDensity;
-}
-
-function doSelect2(iterator, fieldId, fieldParentId, fieldWeight, parents) {
+function doSelect(iterator, fieldId, fieldParentId, fieldWeight, parents) {
 
     if (!iterator)
         return;
@@ -143,17 +90,25 @@ function doSelect2(iterator, fieldId, fieldParentId, fieldWeight, parents) {
 
     var elements = {};
 
-    //var volume;//объем частицы в зависимости от значения поля
-    //var size;//размер частицы
-    //var sizeScale;//масштаб частицы
+    /*
+    var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
+    gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
+    gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
+    }
+    */
 
+    var sizeScale;//масштаб частиц внутри одной области
     var i = 0;
+    var sceneNextId = scene.children.length;
 
     $.each(iterator, function (key, val) {
 
         var weight = getFieldValue(val, fieldWeight);
         var id = getFieldValue(val, fieldId) || '';
         id = id.toUpperCase();
+        if (elements[id])
+            return;
+
         if (parents) {
 
             var parentId = getFieldValue(val, fieldParentId) || '';
@@ -162,22 +117,31 @@ function doSelect2(iterator, fieldId, fieldParentId, fieldWeight, parents) {
 
             if (!parent)
                 throw new Error("No parent found");
+
+            parent.visible && hideElement(parent);
+            //parent.childrenCount++;
         }
 
-        var size = weight2volume(weight) || 1;//вес точки
+        var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
 
-        //sizeScale = i == 0 ? defaultDocumentSize / volume : sizeScale;//i==0 первое значение в выборке самое большое
+        var sizeWeighted = weight && weight2size(weight.length || weight) || 1;//размер на основании веса объекта
 
-        //size = volume;//* defaultDocumentSize / defaultDocumentDensity;// * sizeScale;
+        sizeScale = i == 0 ? size / sizeWeighted : sizeScale;//i==0 первое значение в выборке самое большое. масштаб всех элементов итерации
 
-        if (elements[id])
-            return;
+        size = sizeWeighted * sizeScale;//итоговый размер - размер нормализованный по самому больщому элементу (i=0)
+
 
         elements[id] = {
+
             id: id,
+            index: i,//индекс, порядковый номер элемента внутри геометрии
+            sceneindex: sceneNextId,//индекс, под которым будет в scene.children
             parentId: parent && parent.id,
             size: size,
-            position: setParticle2(
+            childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
+            //childrenCount: 0,
+            visible: true,
+            position: setParticle(
                 i,
                 positions,
                 sizes,
@@ -197,47 +161,15 @@ function doSelect2(iterator, fieldId, fieldParentId, fieldWeight, parents) {
     return elements;
 }
 
-function doSelect(iterator, groupBy, weightBy, posMethod, density) {
+function hideElement(obj) {
 
-    if (!iterator)
+    if (!obj || !obj.visible)
         return;
 
-    var count = iterator.length || 0;
-    var sizes = new Float32Array(count);
-    var positions = new Float32Array(count * 3);
-
-
-    var volume;//объем частицы в зависимости от значения поля
-    var size;//размер частицы
-    //var sizeScale;//масштаб частицы
-
-    var i = 0;
-
-    $.each(iterator, function (key, val) {
-
-        volume = weight2volume(getFieldValue(val, weightBy)) || 1;//вес точки
-
-        //sizeScale = i == 0 ? defaultDocumentSize / volume : sizeScale;//i==0 первое значение в выборке самое большое
-
-        size = volume * defaultDocumentSize / density;// * sizeScale;
-
-        var gravityId = getFieldValue(val, groupBy) || '';
-
-        setParticle(
-            i,
-            positions,
-            sizes,
-            val,
-            size,
-            setGravity(gravityId, size),
-            posMethod
-        );
-
-        i++;
-    });
-
-    drawParticles(positions, sizes);
-    doLink();
+    var geometry = scene.children[obj.sceneindex].geometry;
+    var attribute = geometry.attributes["customSize"];
+    attribute.array[obj.index] = 0;
+    attribute.needsUpdate = true;
 }
 
 function initData(payload) {
@@ -267,35 +199,16 @@ function initData(payload) {
 
         socket.on("graph", function(json) {
 
-            var hits_total = json["hits"];
+            var topagg = json["aggregations"] && json["aggregations"]["agg_my"];
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            //doSelect(agg, "key", "doc_count", getCenterInSphere/*getNoPosition*/, defaultGravityDensity);
-            //doSelect(hits, "this@tablename", "GM_DISPATCH->totalamount", getRandPosOnSphere, defaultDocumentDensity);
-            //var world = {id:'',parentid:'',position:v3Zero.clone(),size:weight2volume(agg.length)};
-            var root = {};
-            //var sizes = new Float32Array(1);
-            //var positions = new Float32Array(1 * 3);
-            //doObject(null, root, "", null, agg.length, null, null);
-            var root = doSelect2([hits_total], null, null, "total", null);
-            var gravities = doSelect2(agg, "key", null, "doc_count", root);
-            var documents = doSelect2(hits, "_id", "this@tablename", "GM_DISPATCH->totalamount",gravities);
+            var root =      doSelect([topagg],  null,       null,               "buckets",                  null);
+            var gravities = doSelect(agg,       "key",      null,               "doc_count",                root);
+            var documents = doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", gravities);
         });
 
     });
-/*
-
-    $.getJSON("ElasticData/response-export-agg-10.json", {async:false,cache:false},function (json) {
-
-        var hits = json["hits"].hits;
-        var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
-
-        doDisperse(agg, "doc_count", "key");//<--запрос аггрегации на основе того, что хотим группировать по this@tablename
-        doSelect(hits, "GM_DISPATCH->tariff", "this@tablename");
-        doLink();
-    });
-*/
 }
 
 function drawLine(from, to, branchesObj) {
@@ -303,8 +216,8 @@ function drawLine(from, to, branchesObj) {
     var v1 = from.position;
     var v2 = to.position;
 
-    var g1 = gravityCenters[from.parent.position];
-    var g2 = gravityCenters[to.parent.position];
+    var g1 = from.parent;
+    var g2 = to.parent;
     var from_to = g2.position.clone().sub(g1.position);
 
     var v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
@@ -318,7 +231,7 @@ function drawLine(from, to, branchesObj) {
         opacity: 0.1,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 0.4,
+        lineWidth: 2,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -390,7 +303,7 @@ function initializeGL() {
     var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
     camera = new THREE.PerspectiveCamera(75, window.width / window.height, 0.1, 1000000);
-    camera.position.z = 750;
+    camera.position.z = 3750;
     camera.aspect = WIDTH / HEIGHT;
     camera.updateProjectionMatrix();
 
@@ -522,9 +435,12 @@ function init() {
 
             {
 
-                "size": 1000,
+                "size": 0,
                 "query": {
                     "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
+                },
+                "sort": {
+                    "GM_DISPATCH->totalamount" : "desc"
                 },
                 "aggs": {
                     "agg_my": {
