@@ -60,7 +60,8 @@ function getFieldValue(obj, field) {
 }
 
 ///используется из-за возможного
-function parseid(str) {
+function value2id(str) {
+
     return str && str.toUpperCase();
 }
 
@@ -93,7 +94,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
     $.each(iterator, function (key, val) {
 
         var weight = getFieldValue(val, fieldWeight);
-        var id = parseid(getFieldValue(val, fieldId)) || '';
+        var id = value2id(getFieldValue(val, fieldId)) || '';
 
         if (into && into[id])
             return;
@@ -102,7 +103,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
 
         if (parents) {
 
-            var parentId = parseid(getFieldValue(val, fieldParentId)) || '';
+            var parentId = value2id(getFieldValue(val, fieldParentId)) || '';
             parent = parents[parentId];
 
             if (!parent)
@@ -126,7 +127,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
             id: id,
             index: i,//индекс, порядковый номер элемента внутри геометрии
             sceneIndex: sceneNextId,//индекс, под которым будет в scene.children
-            parent: parent,// && parent.id,
+            parent: parent,
             size: size,
             childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
             //childrenCount: 0,
@@ -139,7 +140,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
         sizes[obj.index] = obj.size;
 
         //octree.addDeferred(obj);-->
-        octree.addObjectData(obj.id, obj);//<--inherited
+        octree.addObjectData(obj.id, obj);//<--overrided
 
         into[id] = obj;
 
@@ -262,44 +263,13 @@ function doLink(elements, parents) {
         $.each(doc._source["this@targets"], function(key, target) {
 
             var nodeFrom = element;
-            var nodeTo = elements[parseid(target)];
+            var nodeTo = elements[value2id(target)];
 
             drawLine(nodeFrom, nodeTo, parents);
         });
     });
 
     scene.add(links);
-}
-
-function doLink2() {
-
-    var branches = new THREE.Object3D();
-
-    $.each(octree.objects, function(objIndex, obj) {
-
-        if (!obj._source || !obj._source["this@targets"])
-            return;
-
-        $.each(obj._source["this@targets"], function(key, target) {
-
-            //objIndex - индекс объекта octree, которые перебираем
-            //key - название FK
-            //obj - объект ElasticSearch - тот, кто ссылается
-            var nodeFrom = octree.objectsData[objIndex];//кто ссылается, включая данные о координатах
-
-            var index_to = octree.objectsMap[target.toUpperCase()];//ищем номер объекта на который ссылаемся
-
-            if (!index_to)
-                return;
-
-            var nodeTo = octree.objectsData[index_to];//объект, на который ссылаются, включая координаты octree
-            //to.object - объект ElasticSearch
-
-            drawLine(nodeFrom, nodeTo, branches);
-        });
-    });
-
-    scene.add(branches);
 }
 
 function update() {
@@ -438,7 +408,7 @@ function init() {
 
             {
 
-                "size": 0,
+                "size": 1000,
                 "query": {
                     "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
                 },
