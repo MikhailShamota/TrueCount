@@ -12,29 +12,12 @@ var defaultDensity = 0.4;
 
 var root = {};
 var groups = {};
+var documents = {};
+var links;
 
 init();
 paintGL();
 
-function setParticle(num, positions, sizes, obj, id, size, parent) {
-
-    var vertex = getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0);
-
-    if (!positions || !sizes)
-        return vertex;
-
-    vertex.toArray(positions, num * 3);
-
-    sizes[num] = size;
-
-    var node = {
-        vertex: vertex,
-        radius: size,
-        parent: parent
-    };
-
-    return octree.addDeferred(obj, id, node) ? vertex : null;
-}
 
 function drawParticles(positions, sizes) {
 
@@ -76,6 +59,11 @@ function getFieldValue(obj, field) {
     return field && (obj[field] || obj["_source"][field]);
 }
 
+///используется из-за возможного
+function parseid(str) {
+    return str && str.toUpperCase();
+}
+
 function weight2size(weight) {
 
     return Math.cbrt(weight);// * defaultDocumentSize / defaultDocumentDensity;
@@ -99,15 +87,13 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
     }
     */
 
-    var sizeScale;//масштаб частиц внутри одной области
     var i = 0;
     var sceneNextId = scene.children.length;
 
     $.each(iterator, function (key, val) {
 
         var weight = getFieldValue(val, fieldWeight);
-        var id = getFieldValue(val, fieldId) || '';
-        id = id.toUpperCase();
+        var id = parseid(getFieldValue(val, fieldId)) || '';
 
         if (into && into[id])
             return;
@@ -116,8 +102,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
 
         if (parents) {
 
-            var parentId = getFieldValue(val, fieldParentId) || '';
-            parentId = parentId.toUpperCase();
+            var parentId = parseid(getFieldValue(val, fieldParentId)) || '';
             parent = parents[parentId];
 
             if (!parent)
@@ -136,39 +121,35 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
 
         size = sizeWeighted * (parent && parent.sizeScale || size / sizeWeighted);//итоговый размер - размер нормализованный по самому больщому элементу (i=0)
 
-        var pos = setParticle(
-                                i,
-                                positions,
-                                sizes,
-                                val,
-                                id,
-                                size,
-                                parent
-                             );
+        var obj = {
 
-        if (!pos)//если частица не добавлена
-            return;
+            id: id,
+            index: i,//индекс, порядковый номер элемента внутри геометрии
+            sceneIndex: sceneNextId,//индекс, под которым будет в scene.children
+            parent: parent,// && parent.id,
+            size: size,
+            childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
+            //childrenCount: 0,
+            visible: true,
+            position: getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0),
+            document: val
+        };
 
-        if (into)
-            into[id] = {
+        obj.position.toArray(positions, obj.index * 3);
+        sizes[obj.index] = obj.size;
 
-                id: id,
-                index: i,//индекс, порядковый номер элемента внутри геометрии
-                sceneIndex: sceneNextId,//индекс, под которым будет в scene.children
-                parentId: parent && parent.id,
-                size: size,
-                childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
-                //childrenCount: 0,
-                visible: true,
-                position: pos
-            };
+        //octree.addDeferred(obj);-->
+        octree.addObjectData(obj.id, obj);//<--inherited
+
+        into[id] = obj;
 
         i++;
 
     });
 
     drawParticles(positions, sizes);
-    doLink();
+
+    console.log(i + " objects affected")
 }
 
 function hideElement(obj) {
@@ -199,19 +180,25 @@ function initData(payload) {
 
             doSelect([topagg],  null,       null,               "buckets",                  root, null);
             doSelect(agg,       "key",      null,               "doc_count",                groups, root);
-            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", null, groups);
+            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", documents, groups);
+
+
+            doLink(documents, groups);
         });
 
     });
 }
 
-function drawLine(from, to, branchesObj) {
+function drawLine(from, to, parents) {
+
+    if (!from || !to)
+        return;
 
     var v1 = from.position;
     var v2 = to.position;
 
-    var g1 = from.parent;
-    var g2 = to.parent;
+    var g1 = from.parent;//parents[from.parentId];
+    var g2 = to.parent;//parents[to.parentId];
     var from_to = g2.position.clone().sub(g1.position);
 
     var v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
@@ -225,7 +212,7 @@ function drawLine(from, to, branchesObj) {
         opacity: 0.1,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 0.8,
+        lineWidth: 1.8,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -243,7 +230,7 @@ function drawLine(from, to, branchesObj) {
 
     var mesh = new THREE.Mesh(line.geometry, material);
 
-    branchesObj.add(mesh);
+    links.add(mesh);
 
     /*var material2 = new THREE.LineBasicMaterial({
         color: 0x0000ff
@@ -254,7 +241,37 @@ function drawLine(from, to, branchesObj) {
     scene.add(line2)*/
 }
 
-function doLink() {
+function doLink(elements, parents) {
+
+    //полная перестройка узлов
+    scene.remove(links);
+    links = new THREE.Object3D();
+
+    if (!elements)
+        return;
+
+    //var branches = new THREE.Object3D();
+
+    $.each(elements, function(id, element) {
+
+        var doc = element.document;
+
+        if (!doc || !doc._source || !doc._source["this@targets"])
+            return;
+
+        $.each(doc._source["this@targets"], function(key, target) {
+
+            var nodeFrom = element;
+            var nodeTo = elements[parseid(target)];
+
+            drawLine(nodeFrom, nodeTo, parents);
+        });
+    });
+
+    scene.add(links);
+}
+
+function doLink2() {
 
     var branches = new THREE.Object3D();
 
@@ -270,7 +287,7 @@ function doLink() {
             //obj - объект ElasticSearch - тот, кто ссылается
             var nodeFrom = octree.objectsData[objIndex];//кто ссылается, включая данные о координатах
 
-            var index_to = octree.objectsMap[target];//ищем номер объекта на который ссылаемся
+            var index_to = octree.objectsMap[target.toUpperCase()];//ищем номер объекта на который ссылаемся
 
             if (!index_to)
                 return;
