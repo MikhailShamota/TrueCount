@@ -9,9 +9,9 @@
     OctreeParticle.prototype = Object.create(THREE.Octree.prototype);
     OctreeParticle.prototype.constructor = OctreeParticle;
 
-    OctreeParticle.prototype.addDeferred = function (data, idProperty, node) {
+    OctreeParticle.prototype.addDeferred = function (data, id, node) {
 
-        var id = data[idProperty];
+        //var id = data[idProperty];
         if (!id || !this.objectsMap[id]) {
 
             this.objects.push(data);
@@ -20,7 +20,12 @@
 
             //this.objectsMap[id] = data;
             this.objectsMap[id] = this.objectsData.length - 1;//saving index of element
+
+            return true;
+
         }
+
+        return false;
 
         //this.addObjectData(data, node);//-->
     };

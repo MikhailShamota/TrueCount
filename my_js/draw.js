@@ -16,7 +16,7 @@ var groups = {};
 init();
 paintGL();
 
-function setParticle(num, positions, sizes, obj, size, parent) {
+function setParticle(num, positions, sizes, obj, id, size, parent) {
 
     var vertex = getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0);
 
@@ -33,9 +33,7 @@ function setParticle(num, positions, sizes, obj, size, parent) {
         parent: parent
     };
 
-    octree.addDeferred(obj, "_id", node);
-
-    return vertex;
+    return octree.addDeferred(obj, id, node) ? vertex : null;
 }
 
 function drawParticles(positions, sizes) {
@@ -143,9 +141,13 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
                                 positions,
                                 sizes,
                                 val,
+                                id,
                                 size,
                                 parent
                              );
+
+        if (!pos)//если частица не добавлена
+            return;
 
         if (into)
             into[id] = {
@@ -183,22 +185,6 @@ function hideElement(obj) {
 function initData(payload) {
 
     var socket = io("http://172.20.0.121:3228");
-
-    /*
-    var payload = {
-
-        "size": 1000,
-        "query": {
-            "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService"}
-        },
-        "aggs": {
-            "agg_my": {
-                "terms": {"field": "this@tablename", "size": 1000}
-            }
-        }
-    }
-    */
-    //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
     //connect событие при подключении
     socket.on("connect", function() {
@@ -430,15 +416,7 @@ function init() {
     initOctree();
 
     initData(
-       /* {
-
-            "size": 0,
-            "aggs": {
-                "agg_my": {
-                    "terms": {"field": "this@tablename", "size": 1000}
-                }
-            }
-        }*/
+        //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
 
             {
