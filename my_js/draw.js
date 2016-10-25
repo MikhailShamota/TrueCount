@@ -110,6 +110,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
                 throw new Error("No parent found");
 
             parent.visible && hideElement(parent);
+            parent.visible = false;
             //parent.childrenCount++;
         }
 
@@ -407,7 +408,7 @@ function init() {
 
 
             {
-
+                "_source":["this@tablename","this@targets","GM_DISPATCH->totalamount"],
                 "size": 1000,
                 "query": {
                     "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
