@@ -304,7 +304,7 @@ function initializeGL() {
 
     document.body.appendChild(renderer.domElement);
 
-    scene.background = new THREE.Color(0x101010);
+    scene.background = new THREE.Color(0x181818);
 }
 /*
  function resizeGL(canvas) {
@@ -406,7 +406,7 @@ function init() {
     initData(
         //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
-
+            //TODO:шаблоны запросов https://www.elastic.co/guide/en/elasticsearch/reference/current/search-template.html
             {
                 "_source":["this@tablename","this@targets","GM_DISPATCH->totalamount"],
                 "size": 1000,
