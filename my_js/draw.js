@@ -407,21 +407,21 @@ function init() {
         //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
             //TODO:шаблоны запросов https://www.elastic.co/guide/en/elasticsearch/reference/current/search-template.html
-            {
-                "_source":["this@tablename","this@targets","GM_DISPATCH->totalamount"],
-                "size": 1000,
-                "query": {
-                    "match": {"this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
-                },
-                "sort": {
-                    "GM_DISPATCH->totalamount" : "desc"
-                },
-                "aggs": {
-                    "agg_my": {
-                        "terms": {"field": "this@tablename", "size": 1000}
-                    }
+        {
+            "_source":["this@properties.this@tablename","this@targets","this@properties.GM_DISPATCH->totalamount"],
+            "size": 1000,
+            "query": {
+                "match": {"this@properties.this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
+            },
+            "sort": {
+                "this@properties.GM_DISPATCH->totalamount" : "desc"
+            },
+            "aggs": {
+                "agg_my": {
+                    "terms": {"field": "this@properties.this@tablename.keyword", "size": 1000}
                 }
             }
+        }
 
 
     );
