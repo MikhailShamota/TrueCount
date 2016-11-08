@@ -56,7 +56,7 @@ function drawParticles(positions, sizes) {
 
 function getFieldValue(obj, field) {
 
-    return field && (obj[field] || obj["_source"][field]);
+    return field && (obj[field] || obj["_source"][field] || obj["_source"]["this@properties"][field]);
 }
 
 ///используется из-за возможного
@@ -169,6 +169,8 @@ function initData(payload) {
 
     var socket = io("http://172.20.0.121:3228");
 
+    socket.emit("set_url", { url: "http://elastic.axapta.local:80/", path: "ks4/graph/_search" });
+
     //connect событие при подключении
     socket.on("connect", function() {
         //get_graph событие для сервера и объект-запрос к эластику
@@ -264,7 +266,7 @@ function doLink(elements, parents) {
         $.each(doc._source["this@targets"], function(key, target) {
 
             var nodeFrom = element;
-            var nodeTo = elements[value2id(target)];
+            var nodeTo = elements[value2id(target["this@source"])];
 
             drawLine(nodeFrom, nodeTo, parents);
         });
