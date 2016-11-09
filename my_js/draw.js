@@ -59,6 +59,56 @@ function getFieldValue(obj, field) {
     return field && (obj[field] || obj["_source"][field] || obj["_source"]["this@properties"][field]);
 }
 
+function getHitsTargets(obj) {
+
+    if (!obj || !obj._source || !obj._source["this@targets"])
+        return null;
+
+    var docs = obj._source["this@targets"];
+
+    if (docs.length == 0)
+        return;
+
+    var targets = new Array(docs.length);
+    var i = 0;
+
+    $.each(docs, function(key, target) {
+
+        targets[i] = {
+            id: value2id(target["this@source"]),
+            weight: 1
+        };
+        i++;
+    });
+
+    return targets;
+}
+
+function getAggBucketsTargets(obj) {
+
+    if (!obj || !obj.agg2 || !obj.agg2.agg3 || !obj.agg2.agg3["buckets"])
+        return null;
+
+    var buckets = obj.agg2.agg3["buckets"];
+
+    if (buckets.length == 0)
+        return;
+
+    var targets = new Array(buckets.length);
+    var i = 0;
+
+    $.each(buckets, function(key, target) {
+
+        targets[i] = {
+            id: value2id(target.key),
+            weight: weight2size(target.doc_count)
+        };
+        i++;
+    });
+
+    return targets;
+}
+
 ///используется из-за возможного
 function value2id(str) {
 
@@ -70,7 +120,7 @@ function weight2size(weight) {
     return Math.cbrt(weight);// * defaultDocumentSize / defaultDocumentDensity;
 }
 
-function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) {
+function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents, getTargets) {
 
     if (!iterator)
         return;
@@ -134,7 +184,8 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents) 
             //childrenCount: 0,
             visible: true,
             position: getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0),
-            document: val
+            document: val,
+            targets: getTargets && getTargets(val)
         };
 
         obj.position.toArray(positions, obj.index * 3);
@@ -165,7 +216,7 @@ function hideElement(obj) {
     attribute.needsUpdate = true;
 }
 
-function initData(payload) {
+function getData(payload) {
 
     var socket = io("http://172.20.0.121:3228");
 
@@ -183,17 +234,17 @@ function initData(payload) {
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
             doSelect([topagg],  null,       null,               "buckets",                  root, null);
-            doSelect(agg,       "key",      null,               "doc_count",                groups, root);
-            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", documents, groups);
+            doSelect(agg,       "key",      null,               "doc_count",                groups,     root,   getAggBucketsTargets);
+            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", documents,  groups, getHitsTargets);
 
-
-            doLink(documents, groups);
+            doLink(documents);
+            doLink(groups);
         });
 
     });
 }
 
-function drawLine(from, to, parents) {
+function drawLine(from, to, weight) {
 
     if (!from || !to)
         return;
@@ -211,12 +262,12 @@ function drawLine(from, to, parents) {
 
     var material = new THREE.MeshLineMaterial( {
         useMap: false,
-        color: new THREE.Color(0.1,0.4,0.1),
+        color: new THREE.Color(0.15,0.4,0.15),
         transparent:true,
-        opacity: 0.1,
+        opacity: 0.15,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 1.8,
+        lineWidth: 2.2 * weight,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -245,7 +296,7 @@ function drawLine(from, to, parents) {
     scene.add(line2)*/
 }
 
-function doLink(elements, parents) {
+function doLink(elements) {
 
     //полная перестройка узлов
     scene.remove(links);
@@ -254,10 +305,9 @@ function doLink(elements, parents) {
     if (!elements)
         return;
 
-    //var branches = new THREE.Object3D();
-
     $.each(elements, function(id, element) {
 
+        /*
         var doc = element.document;
 
         if (!doc || !doc._source || !doc._source["this@targets"])
@@ -269,6 +319,20 @@ function doLink(elements, parents) {
             var nodeTo = elements[value2id(target["this@source"])];
 
             drawLine(nodeFrom, nodeTo, parents);
+        });
+        */
+        var targets = element.targets;
+
+        if (!targets)
+            return;
+
+        $.each(targets, function(key, target) {
+
+            var nodeFrom = element;
+            var nodeTo = elements[target.id];
+            var weight = target.weight;
+
+            drawLine(nodeFrom, nodeTo, weight);
         });
     });
 
@@ -405,25 +469,62 @@ function init() {
     initControls();
     initOctree();
 
-    initData(
+    getData(
         //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
             //TODO:шаблоны запросов https://www.elastic.co/guide/en/elasticsearch/reference/current/search-template.html
+
         {
-            "_source":["this@properties.this@tablename","this@targets","this@properties.GM_DISPATCH->totalamount"],
-            "size": 1000,
-            "query": {
-                "match": {"this@properties.this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
-            },
-            "sort": {
-                "this@properties.GM_DISPATCH->totalamount" : "desc"
-            },
+            "_source":["this@properties.this@tablename","this@targets"],
+            "size": 0,
             "aggs": {
                 "agg_my": {
-                    "terms": {"field": "this@properties.this@tablename.keyword", "size": 1000}
+                    "terms": {"field": "this@properties.this@tablename.keyword", "size": 1000},
+                    "aggs": {
+                        "agg2": {
+
+                            "nested": {"path":"this@targets"},
+
+                            "aggs": {
+                                "agg3": {"terms":{"field": "this@targets.this@tablename.keyword"}
+                                }
+                            }
+
+                        }
+                    }
                 }
             }
         }
+
+        /*
+         {
+         "_source":["this@properties.this@tablename","this@targets","this@properties.GM_DISPATCH->totalamount"],
+         "size": 1000,
+         "query": {
+         "match": {"this@properties.this@tablename": "GM_Dispatch OR GM_DispatchClient OR GM_DispatchAddService OR GM_WayBill"}
+         },
+         "sort": {
+         "this@properties.GM_DISPATCH->totalamount" : "desc"
+         },
+         "aggs": {
+         "agg_my": {
+         "terms": {"field": "this@properties.this@tablename.keyword", "size": 1000},
+         "aggs": {
+         "agg2": {
+
+         "nested": {"path":"this@targets"},
+
+         "aggs": {
+         "agg3": {"terms":{"field": "this@targets.this@tablename.keyword"}
+         }
+         }
+
+         }
+         }
+         }
+         }
+         }
+*/
 
 
     );
