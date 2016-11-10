@@ -9,17 +9,19 @@ var octree;
 var worldSize = 1000;
 var defaultDensity = 0.4;
 
-
+/*
 var root = {};
 var groups = {};
 var documents = {};
-var links;
+*/
+var Links;
+var Nodes = {};
 
 init();
 paintGL();
 
 
-function drawParticles(positions, sizes) {
+function addParticles(positions, sizes) {
 
     //var textureLoader = new THREE.TextureLoader();
     //var tex = textureLoader.load("2.png");//THREE.ImageUtils.loadTexture("1.jpg"),
@@ -120,7 +122,7 @@ function weight2size(weight) {
     return Math.cbrt(weight);// * defaultDocumentSize / defaultDocumentDensity;
 }
 
-function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents, getTargets) {
+function doSelect(iterator, fieldId, fieldParentId, fieldWeight, getTargets) {
 
     if (!iterator)
         return;
@@ -128,15 +130,6 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents, 
     var count = iterator.length || 0;
     var sizes = new Float32Array(count);
     var positions = new Float32Array(count * 3);
-
-    //var into = {};
-
-    /*
-    var center = getAnySpherePosNearby(gravityCentersCenter, gravityCentersRadius, r);
-    gravityCentersRadius = r + gravityCentersRadius + (gravityCentersSpacing * r);//(R+r) + (delta * r)
-    gravityCentersCenter = center.clone().sub(gravityCentersCenter).normalize().multiplyScalar(r);
-    }
-    */
 
     var i = 0;
     var sceneNextId = scene.children.length;
@@ -146,26 +139,15 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents, 
         var weight = getFieldValue(val, fieldWeight);
         var id = value2id(getFieldValue(val, fieldId)) || '';
 
-        if (into && into[id])
-            return;
+        if (Nodes[id])
+            return;//TODO:может быть обновлять объект при повторной загрузке? Пока считаем, что повторное считывание не более чем повторное считывание
 
-        var parent;
 
-        if (parents) {
+        var parentId = value2id(getFieldValue(val, fieldParentId)) || '';
+        var parent = Nodes[parentId];
 
-            var parentId = value2id(getFieldValue(val, fieldParentId)) || '';
-            parent = parents[parentId];
-
-            if (!parent)
-                throw new Error("No parent found");
-
-            parent.visible && hideElement(parent);
-            parent.visible = false;
-            //parent.childrenCount++;
-        }
 
         var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
-
         var sizeWeighted = weight && weight2size(weight.length || weight) || 1;//размер на основании веса объекта
 
         if (parent && !parent.sizeScale)
@@ -181,7 +163,7 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents, 
             parent: parent,
             size: size,
             childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
-            //childrenCount: 0,
+            children: {},
             visible: true,
             position: getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0),
             document: val,
@@ -191,16 +173,23 @@ function doSelect(iterator, fieldId, fieldParentId, fieldWeight, into, parents, 
         obj.position.toArray(positions, obj.index * 3);
         sizes[obj.index] = obj.size;
 
+        if (parent) {
+
+            parent.visible && hideElement(parent);
+            parent.visible = false;
+            parent.children[obj.id] = obj;
+        }
+
         //octree.addDeferred(obj);-->
         octree.addObjectData(obj.id, obj);//<--overrided
 
-        into[id] = obj;
+        Nodes[id] = obj;
 
         i++;
 
     });
 
-    drawParticles(positions, sizes);
+    addParticles(positions, sizes);
 
     console.log(i + " objects affected")
 }
@@ -229,34 +218,38 @@ function getData(payload) {
 
         socket.on("graph", function(json) {
 
-            var topagg = json["aggregations"] && json["aggregations"]["agg_my"];
+            var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            doSelect([topagg],  null,       null,               "buckets",                  root, null);
-            doSelect(agg,       "key",      null,               "doc_count",                groups,     root,   getAggBucketsTargets);
-            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount", documents,  groups, getHitsTargets);
+            doSelect(topagg,    null,       null,               "buckets");
+            doSelect(agg,       "key",      null,               "doc_count",       getAggBucketsTargets);
+            doSelect(hits,      "_id",      "this@tablename",   "GM_DISPATCH->totalamount",  getHitsTargets);
 
-            doLink(documents);
-            doLink(groups);
+            //doLink(documents);
+            addLinks();
         });
 
     });
 }
 
-function drawLine(from, to, weight) {
-
-    if (!from || !to)
-        return;
+function branch(from, to, size) {
 
     var v1 = from.position;
     var v2 = to.position;
 
-    var g1 = from.parent;//parents[from.parentId];
-    var g2 = to.parent;//parents[to.parentId];
-    var from_to = g2.position.clone().sub(g1.position);
+    var v3 = v3Zero.clone();
+    if (from.parent.id == to.parent.id)
 
-    var v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
+        v3 = from.parent.position.clone();
+    else {
+
+        var g1 = from.parent.parent || from.parent;
+        var g2 = to.parent.parent || to.parent;
+        var from_to = g2.position.clone().sub(g1.position);
+
+        v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
+    }
 
     var canvasSize = new THREE.Vector2(renderer.context.canvas.width, renderer.context.canvas.height);
 
@@ -267,7 +260,7 @@ function drawLine(from, to, weight) {
         opacity: 0.15,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 2.2 * weight,
+        lineWidth: 0.8 * size,
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -283,44 +276,21 @@ function drawLine(from, to, weight) {
     var line = new THREE.MeshLine();
     line.setGeometry(geometry);
 
-    var mesh = new THREE.Mesh(line.geometry, material);
-
-    links.add(mesh);
-
-    /*var material2 = new THREE.LineBasicMaterial({
-        color: 0x0000ff
-    });
-    var geometry2 = new THREE.Geometry();
-    geometry2.vertices.push(v1, v2);
-    var line2 = new THREE.Line( geometry2, material2 );
-    scene.add(line2)*/
+    return new THREE.Mesh(line.geometry, material);
 }
 
-function doLink(elements) {
+function addLinks() {
 
     //полная перестройка узлов
-    scene.remove(links);
-    links = new THREE.Object3D();
+    scene.remove(Links);
 
-    if (!elements)
+    Links = new THREE.Object3D();
+
+    if (!Nodes)
         return;
 
-    $.each(elements, function(id, element) {
+    $.each(Nodes, function(id, element) {
 
-        /*
-        var doc = element.document;
-
-        if (!doc || !doc._source || !doc._source["this@targets"])
-            return;
-
-        $.each(doc._source["this@targets"], function(key, target) {
-
-            var nodeFrom = element;
-            var nodeTo = elements[value2id(target["this@source"])];
-
-            drawLine(nodeFrom, nodeTo, parents);
-        });
-        */
         var targets = element.targets;
 
         if (!targets)
@@ -329,14 +299,17 @@ function doLink(elements) {
         $.each(targets, function(key, target) {
 
             var nodeFrom = element;
-            var nodeTo = elements[target.id];
-            var weight = target.weight;
+            var nodeTo = Nodes[target.id];
+            var size = nodeTo && nodeTo.size;
 
-            drawLine(nodeFrom, nodeTo, weight);
+            if (!nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible)
+                return;
+
+            Links.add(branch(nodeFrom, nodeTo, size));
         });
     });
 
-    scene.add(links);
+    scene.add(Links);
 }
 
 function update() {
@@ -469,6 +442,8 @@ function init() {
     initControls();
     initOctree();
 
+
+
     getData(
         //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
@@ -496,7 +471,7 @@ function init() {
             }
         }
 
-        /*
+/*
          {
          "_source":["this@properties.this@tablename","this@targets","this@properties.GM_DISPATCH->totalamount"],
          "size": 1000,
@@ -524,8 +499,8 @@ function init() {
          }
          }
          }
-*/
 
+*/
 
     );
 }
