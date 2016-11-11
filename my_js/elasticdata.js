@@ -68,6 +68,24 @@ function getAggBucketsTargets(obj) {
 }
 
 function getData(payload) {
+/*
+    //$.getJSON("http://elastic.axapta.local:80/ks4/graph/_search", {async:false,cache:false}, function (json) {
+    $.post("http://elastic.axapta.local:80/ks4/graph/_search", payload, function(json, textStatus) {
+
+        console.log("connect to Elastic:" + textStatus);//textStatus contains the status: success, error, etc
+
+        var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
+        var hits = json["hits"].hits;
+        var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
+
+        doSelect(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
+        doSelect(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
+        doSelect(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
+
+        addLinks();
+    }, "json");
+
+    return;*/
 
     var socket = io("http://172.20.0.121:3228");
 
@@ -75,7 +93,6 @@ function getData(payload) {
 
     //connect событие при подключении
     socket.on("connect", function() {
-        //get_graph событие для сервера и объект-запрос к эластику
         socket.emit("get_graph", payload);
 
         socket.on("graph", function(json) {
