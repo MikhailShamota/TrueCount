@@ -233,10 +233,13 @@ function getData(payload) {
     });
 }
 
-function branch(from, to, size) {
+function branch(from, to) {
 
     var v1 = from.position;
     var v2 = to.position;
+
+    var s1 = from.size;
+    var s2 = to.size;
 
     var v3 = v3Zero.clone();
     if (from.parent.id == to.parent.id)
@@ -260,7 +263,7 @@ function branch(from, to, size) {
         opacity: 0.15,
         resolution: canvasSize,
         sizeAttenuation: true,
-        lineWidth: 0.8 * size,
+        lineWidth: 0.8,//see size changes function bellow
         near: camera.near,
         far: camera.far,
         depthWrite: false,
@@ -274,7 +277,11 @@ function branch(from, to, size) {
     //geometry.vertices.push(v1, v2);//straight line
 
     var line = new THREE.MeshLine();
-    line.setGeometry(geometry);
+    line.setGeometry(
+
+        geometry,
+        function(p) {return s2 * p + s1 * (1 - p)}//size changes linear from start to end
+    );
 
     return new THREE.Mesh(line.geometry, material);
 }
@@ -300,12 +307,11 @@ function addLinks() {
 
             var nodeFrom = element;
             var nodeTo = Nodes[target.id];
-            var size = nodeTo && nodeTo.size;
 
             if (!nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible)
                 return;
 
-            Links.add(branch(nodeFrom, nodeTo, size));
+            Links.add(branch(nodeFrom, nodeTo));
         });
     });
 
@@ -448,7 +454,7 @@ function init() {
         //data.query.match[groupBy] = "GM_Dispatch OR GM_DispatchClient OR GM_WayBill OR GM_DispatchAddService";
 
             //TODO:шаблоны запросов https://www.elastic.co/guide/en/elasticsearch/reference/current/search-template.html
-
+/*
         {
             "_source":["this@properties.this@tablename","this@targets"],
             "size": 0,
@@ -470,8 +476,8 @@ function init() {
                 }
             }
         }
+*/
 
-/*
          {
          "_source":["this@properties.this@tablename","this@targets","this@properties.GM_DISPATCH->totalamount"],
          "size": 1000,
@@ -500,7 +506,7 @@ function init() {
          }
          }
 
-*/
+
 
     );
 }
