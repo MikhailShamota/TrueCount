@@ -67,7 +67,58 @@ function getAggBucketsTargets(obj) {
     return targets;
 }
 
-function getData(payload) {
+function getData(body) {
+
+    var xhr = new XMLHttpRequest();
+    var path = 'http://elastic.axapta.local:80/ks4/graph/_search?scroll=3m';
+    var stringBody = JSON.stringify(body);
+    xhr.open('post', path, false);
+    //Отсылаем запрос, в параметрах body: string
+    xhr.send(stringBody);
+    if (xhr.status != 200) {
+        // обработать ошибку
+        console.log(xhr.status + ': ' + xhr.statusText); // пример вывода: 404: Not Found
+    } else {
+        //xhr.response - string
+        var result = JSON.parse(xhr.response);
+        var scroll_id = result._scroll_id;
+        stringBody = JSON.stringify({
+            "scroll": "1m",
+            "scroll_id": scroll_id
+        });
+        while (true) {
+            xhr.open('post', 'http://elastic.axapta.local:80/_search/scroll', false);
+            xhr.send(stringBody);
+            if (xhr.status != 200)
+                console.log(xhr.status + ': ' + xhr.statusText); // пример вывода: 404: Not Found
+            else {
+                var objResponse = JSON.parse(xhr.response);
+
+                if (objResponse.hits.hits.length === 0)
+                    break;
+
+                result.hits.hits = result.hits.hits.concat(objResponse.hits.hits)
+
+            }
+        }
+        runData(result);
+    }
+}
+
+function runData(json) {
+
+    var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
+    var hits = json["hits"].hits;
+    var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
+
+    topagg && doSelect(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
+    agg && doSelect(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
+    hits && doSelect(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
+
+    addLinks();
+}
+
+function getData2(payload) {
 /*
     //$.getJSON("http://elastic.axapta.local:80/ks4/graph/_search", {async:false,cache:false}, function (json) {
     $.post("http://elastic.axapta.local:80/ks4/graph/_search", payload, function(json, textStatus) {

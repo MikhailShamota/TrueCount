@@ -10,11 +10,13 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 
+var Context2d;
 
 var worldSize = 1000;
 var defaultDensity = 0.4;
 var Links;
 var Nodes = {};
+var Hints = {};
 
 function getRandomUnitVector() {
 
@@ -83,6 +85,12 @@ function weight2size(weight) {
     return weight && Math.cbrt(weight) || 1;// * defaultDocumentSize / defaultDocumentDensity;
 }
 
+function id2hint(id) {
+
+    var obj = Nodes[id];
+    return obj.id + ":" + obj.weight;
+}
+
 function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
 
     if (!iterator)
@@ -124,6 +132,7 @@ function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
             sceneIndex: sceneNextId,//индекс, под которым будет в scene.children
             parent: parent,
             size: size,
+            weight: weight,
             childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
             children: {},
             visible: true,
@@ -225,7 +234,8 @@ function addLinks() {
     //полная перестройка узлов
     scene.remove(Links);
 
-    Links = new THREE.Object3D();
+    //Links = new THREE.Object3D();
+    Links = new THREE.Mesh();
 
     if (!Nodes)
         return;
@@ -261,7 +271,7 @@ function update() {
     stats.update();
 }
 
-function initializeGL() {
+function initGL() {
 
     scene = new THREE.Scene();
     var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
@@ -374,13 +384,17 @@ function onMouseClick(event) {
             //var mesh = new THREE.Mesh(new THREE.SphereGeometry(val.radius,10,10),new THREE.MeshBasicMaterial({color:0xffffffff}));
             //mesh.position.set(boundingSphere.center.x,boundingSphere.center.y,boundingSphere.center.z);
             //scene.add(mesh);
-            console.log(val.object);
+            var id = val.object;
+
+            Hints[id] = id2hint(id);
+
+            console.log(Hints[id]);
         }
     });
 }
 
 function init() {
-    initializeGL();
+    initGL();
     initStats();
     initControls();
     initOctree();
