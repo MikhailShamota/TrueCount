@@ -69,8 +69,9 @@ function getAggBucketsTargets(obj) {
 
 function getData(body) {
 
+    var elasticURL = 'http://elastic.axapta.local:80';
     var xhr = new XMLHttpRequest();
-    var path = 'http://elastic.axapta.local:80/ks4/graph/_search?scroll=3m';
+    var path = elasticURL + '/ks4/graph/_search?scroll=3m';
     var stringBody = JSON.stringify(body);
     xhr.open('post', path, false);
     //Отсылаем запрос, в параметрах body: string
@@ -83,15 +84,20 @@ function getData(body) {
         var result = JSON.parse(xhr.response);
         var scroll_id = result._scroll_id;
         stringBody = JSON.stringify({
+
             "scroll": "1m",
             "scroll_id": scroll_id
         });
         while (true) {
-            xhr.open('post', 'http://elastic.axapta.local:80/_search/scroll', false);
+
+            xhr.open('post', elasticURL + '/_search/scroll', false);
             xhr.send(stringBody);
+
             if (xhr.status != 200)
+
                 console.log(xhr.status + ': ' + xhr.statusText); // пример вывода: 404: Not Found
             else {
+
                 var objResponse = JSON.parse(xhr.response);
 
                 if (objResponse.hits.hits.length === 0)

@@ -10,13 +10,10 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 
-var Context2d;
-
 var worldSize = 1000;
 var defaultDensity = 0.4;
 var Links;
 var Nodes = {};
-var Hints = {};
 
 function getRandomUnitVector() {
 
@@ -85,10 +82,51 @@ function weight2size(weight) {
     return weight && Math.cbrt(weight) || 1;// * defaultDocumentSize / defaultDocumentDensity;
 }
 
-function id2hint(id) {
+function node2hint(node) {
 
-    var obj = Nodes[id];
-    return obj.id + ":" + obj.weight;
+    return node.id + ":" + node.weight;
+}
+
+function label(txt, billboardSize) {
+
+    var scale = worldSize * 0.5;
+    var canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+
+    var context = canvas.getContext("2d");
+
+    var fontSizes = [72, 36, 28, 14, 12, 10, 5, 2],
+        textDimensions,
+        i = 0;
+
+    do {
+
+        context.font = "Bold " + fontSizes[i++] + 'px Arial';
+        textDimensions = context.measureText(txt);
+    } while (textDimensions.width >= canvas.width);
+
+
+    context.fillStyle = 'black';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    //context.fillStyle = "rgba(1.0, 1.0, 0, 1.0)";
+    context.fillText(txt, canvas.width / 2, canvas.height / 2);
+
+    var texture = new THREE.Texture(canvas);
+    texture.needsUpdate = true;
+
+    var spriteMaterial = new THREE.SpriteMaterial({map: texture});
+    var sprite = new THREE.Sprite(spriteMaterial);
+    sprite.scale.set(scale * billboardSize / canvas.width, scale * billboardSize / canvas.height, 1);
+
+    return sprite;
+}
+
+function addLabel(node) {
+
+    var sprite = label(node2hint(node), node.size);
+    sprite.position.set(node.position.x, node.position.y, node.position.z);
+    scene.add(sprite);
 }
 
 function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
@@ -371,6 +409,8 @@ function onMouseClick(event) {
         raycaster.ray.direction);
 
     var boundingSphere = new THREE.Sphere();
+    //var found = 0;
+
     $.each(octreeObjects, function(key, val) {
 
         //TODO:into particlenode class
@@ -380,15 +420,25 @@ function onMouseClick(event) {
         //boundingSphere.center = (x).sub(y).add(val.position);
         boundingSphere.center = val.position;
         boundingSphere.radius = val.radius;
+
+        //if (found > 10)
+           // return;
+
         if (raycaster.ray.intersectSphere(boundingSphere)) {
             //var mesh = new THREE.Mesh(new THREE.SphereGeometry(val.radius,10,10),new THREE.MeshBasicMaterial({color:0xffffffff}));
             //mesh.position.set(boundingSphere.center.x,boundingSphere.center.y,boundingSphere.center.z);
             //scene.add(mesh);
             var id = val.object;
+            var node = Nodes[id];
 
-            Hints[id] = id2hint(id);
+            if (!node.visible)
+                return;
 
-            console.log(Hints[id]);
+            addLabel(node);
+
+            console.log(id);
+
+            //found++;
         }
     });
 }
