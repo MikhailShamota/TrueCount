@@ -89,13 +89,12 @@ function node2hint(node) {
 
 function label(txt, billboardSize) {
 
-    var scale = worldSize * 0.5;
     var canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
+    canvas.width = canvas.height = 512;//четкость зависит от
 
     var context = canvas.getContext("2d");
 
-    var fontSizes = [72, 36, 28, 14, 12, 10, 5, 2],
+    var fontSizes = [72, 50, 36, 28, 20, 14, 12, 10, 8, 6, 5, 4, 3, 2],
         textDimensions,
         i = 0;
 
@@ -106,6 +105,8 @@ function label(txt, billboardSize) {
     } while (textDimensions.width >= canvas.width);
 
 
+    /*context.fillStyle = 'white';
+    context.fillRect(0,0,canvas.width,canvas.height);*/
     context.fillStyle = 'black';
     context.textAlign = "center";
     context.textBaseline = "middle";
@@ -115,16 +116,16 @@ function label(txt, billboardSize) {
     var texture = new THREE.Texture(canvas);
     texture.needsUpdate = true;
 
-    var spriteMaterial = new THREE.SpriteMaterial({map: texture});
+    var spriteMaterial = new THREE.SpriteMaterial({map: texture, });
     var sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(scale * billboardSize / canvas.width, scale * billboardSize / canvas.height, 1);
+    sprite.scale.set(billboardSize, billboardSize, 1);
 
     return sprite;
 }
 
 function addLabel(node) {
 
-    var sprite = label(node2hint(node), node.size);
+    var sprite = label(node2hint(node), node.size * 2 /*R x 2*/ );
     sprite.position.set(node.position.x, node.position.y, node.position.z);
     scene.add(sprite);
 }
