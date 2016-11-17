@@ -2,7 +2,8 @@
  * Created by mshamota on 11.11.2016.
  */
 var TrueCount = (function () {
-    var instance;
+
+var instance;
 
 
 const v3Zero = new THREE.Vector3(0, 0, 0);
@@ -17,8 +18,9 @@ var stats, controls;
 var camera, scene, renderer;
 var octree;
 
-var Links;
+var LinksMesh;
 var Nodes = {};
+var Branches = {};
 
 var Materials;
 
@@ -112,18 +114,24 @@ function label(txt, billboardSize) {
     } while (textDimensions.width >= canvas.width);
 
 
-    /*context.fillStyle = 'white';
-    context.fillRect(0,0,canvas.width,canvas.height);*/
+    context.fillStyle = "rgba(100, 200, 100, 0.8)";
+    context.fillRect(0,0,canvas.width,canvas.height);
+
     context.fillStyle = 'black';
     context.textAlign = "center";
     context.textBaseline = "middle";
-    //context.fillStyle = "rgba(1.0, 1.0, 0, 1.0)";
+
     context.fillText(txt, canvas.width / 2, canvas.height / 2);
 
     var texture = new THREE.Texture(canvas);
     texture.needsUpdate = true;
 
-    var spriteMaterial = new THREE.SpriteMaterial({map: texture });
+    var spriteMaterial = new THREE.SpriteMaterial({
+
+        map: texture,
+        blending :THREE.NoBlending
+    });
+
     var sprite = new THREE.Sprite(spriteMaterial);
     sprite.scale.set(billboardSize, billboardSize, 1);
 
@@ -131,6 +139,9 @@ function label(txt, billboardSize) {
 }
 
 function addLabel(node) {
+
+    if (node.label)
+        return;
 
     var sprite = label(node2hint(node), node.size * 2 /*R x 2*/ );
     sprite.position.set(node.position.x, node.position.y, node.position.z);
@@ -224,7 +235,7 @@ function hideElement(obj) {
     attribute.needsUpdate = true;
 }
 
-function branch(from, to) {
+function branch(from, to, material) {
 
     var v1 = from.position;
     var v2 = to.position;
@@ -244,24 +255,6 @@ function branch(from, to) {
 
         v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
     }
-/*
-    var canvasSize = new THREE.Vector2(renderer.context.canvas.width, renderer.context.canvas.height);
-
-
-    var material = new THREE.MeshLineMaterial( {
-        useMap: false,
-        color: new THREE.Color(0.15,0.4,0.15),
-        transparent:true,
-        opacity: 0.15,
-        resolution: canvasSize,
-        sizeAttenuation: true,
-        lineWidth: 0.8,//see size changes function bellow
-        near: camera.near,
-        far: camera.far,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-    });
-    */
 
     var curve = new THREE.QuadraticBezierCurve3 (v1, v3, v2);
     var geometry = new THREE.Geometry();
@@ -276,21 +269,23 @@ function branch(from, to) {
         function(p) {return s2 * p + s1 * (1 - p)}//size changes linear from start to end
     );
 
-    return new THREE.Mesh(line.geometry, /*material*/ Materials.branch);
+    return new THREE.Mesh(line.geometry, material);
 }
 
-function addLinks() {
+function addLinks(nodes, mesh, material) {
 
     //полная перестройка узлов
-    scene.remove(Links);
+    scene.remove(mesh);
 
-    //Links = new THREE.Object3D();
-    Links = new THREE.Mesh();
+    mesh = new THREE.Mesh();
 
     if (!Nodes)
         return;
 
-    $.each(Nodes, function(id, element) {
+    //var sceneNextId = scene.children.length;
+    //var i = 0;
+
+    $.each(nodes, function(id, element) {
 
         var targets = element.targets;
 
@@ -300,7 +295,7 @@ function addLinks() {
         $.each(targets, function(key, target) {
 
             var nodeFrom = element;
-            var nodeTo = Nodes[target.id];
+            var nodeTo = Nodes[target.id];//search in global
 
             if (!nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible)
                 return;
@@ -308,11 +303,46 @@ function addLinks() {
             if (nodeFrom.id == nodeTo.id)
                 return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
 
-            Links.add(branch(nodeFrom, nodeTo));
+            mesh.add(branch(nodeFrom, nodeTo, material));
+
+            //nodeFrom.targets[key].sceneIndex = sceneNextId;//номер в сцене
+            //nodeFrom.targets[key].index = i;//порядковый номер в геометрии, которая в сцене
+            //i++;
         });
     });
 
-    scene.add(Links);
+    scene.add(mesh);
+}
+
+function getLinkedNodes(nodeFrom, pathOfNodes) {
+
+    if (pathOfNodes[nodeFrom.id])
+        return;//если узел уже найден - исключение закцикливания явного и неявного
+
+    pathOfNodes[nodeFrom.id] = nodeFrom;
+
+    if (!nodeFrom.targets)
+        return;//если нет дальнейших шагов
+
+    $.each(nodeFrom.targets, function(key, target) {
+
+        getLinkedNodes(Nodes[target.id], pathOfNodes);
+    });
+}
+
+function showLinked(nodeFrom) {
+
+    var mesh;
+    var pathOfNodes = {};
+
+    getLinkedNodes(nodeFrom, pathOfNodes);
+
+    addLinks(pathOfNodes, mesh, Materials.branchShow)
+
+    $.each(pathOfNodes, function(id, node) {
+
+        addLabel(node);
+    });
 }
 
 function update() {
@@ -447,11 +477,12 @@ function onMouseClick(event) {
             if (!node.visible)
                 return;
 
-            if (!node.label)
-                addLabel(node);
+            /*if (!node.label)
+                addLabel(node);*/
 
             console.log(Nodes[id].document);
 
+            showLinked(node);
             //found++;
         }
     });
@@ -472,7 +503,7 @@ function draw() {
     renderer.render(scene, camera);
 }
 
-NodeShader = {
+const NodeShader = {
 
     uniforms: {
 
@@ -519,6 +550,7 @@ function initMaterials() {
     nodeMaterial.blending = THREE.AdditiveBlending;
 
     var branchMaterial = new THREE.MeshLineMaterial( {
+
         useMap: false,
         color: new THREE.Color(0.15,0.4,0.15),
         transparent:true,
@@ -532,10 +564,16 @@ function initMaterials() {
         blending: THREE.AdditiveBlending
     });
 
+    var branchShowMaterial = branchMaterial.clone();
+    branchShowMaterial.uniforms.opacity.value = 0.95;
+    branchShowMaterial.uniforms.color.value = new THREE.Color(0.5,0.9,0.5)
+    //branchShowMaterial.blending.value = THREE.AdditiveBlending;
+
     Materials = {
 
         "node" : nodeMaterial,
-        "branch" : branchMaterial
+        "branch" : branchMaterial,
+        "branchShow" : branchShowMaterial
     }
 }
 
@@ -565,7 +603,7 @@ return {
     },
 
     addLinks: function() {
-        addLinks();
+        addLinks(Nodes, LinksMesh, Materials.branch);
     }
 }
 
