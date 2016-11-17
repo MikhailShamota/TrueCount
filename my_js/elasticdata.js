@@ -42,6 +42,12 @@ function getHitsTargets(obj) {
     return targets;
 }
 
+///используется из-за возможного
+function value2id(str) {
+
+    return str && str.toUpperCase();
+}
+
 function getAggBucketsTargets(obj) {
 
     if (!obj || !obj.agg2 || !obj.agg2.agg3 || !obj.agg2.agg3["buckets"])
@@ -58,8 +64,8 @@ function getAggBucketsTargets(obj) {
     $.each(buckets, function(key, target) {
 
         targets[i] = {
-            id: value2id(target.key),
-            weight: weight2size(target.doc_count)
+            id: value2id(target.key)
+            //,            weight: target.doc_count
         };
         i++;
     });
@@ -117,11 +123,11 @@ function runData(json) {
     var hits = json["hits"].hits;
     var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-    topagg && doSelect(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
-    agg && doSelect(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
-    hits && doSelect(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
+    topagg && TrueCount.addNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
+    agg && TrueCount.addNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
+    hits && TrueCount.addNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
 
-    addLinks();
+    TrueCount.addLinks();
 }
 
 function getData2(payload) {
@@ -158,11 +164,11 @@ function getData2(payload) {
             var hits = json["hits"].hits;
             var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-            doSelect(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
-            doSelect(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
-            doSelect(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
+            TrueCount.addNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
+            TrueCount.addNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
+            TrueCount.addNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
 
-            addLinks();
+            TrueCount.addLinks();
         });
 
     });

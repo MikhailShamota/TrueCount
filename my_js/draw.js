@@ -3,8 +3,8 @@
  */
 
 
-init();
-paintGL();
+TrueCount.init();
+TrueCount.draw();
 
 
 

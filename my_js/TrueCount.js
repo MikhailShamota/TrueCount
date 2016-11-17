@@ -1,13 +1,17 @@
 /**
  * Created by mshamota on 11.11.2016.
  */
+var TrueCount = (function () {
+    var instance;
+
+
 const v3Zero = new THREE.Vector3(0, 0, 0);
 const v3UnitX = new THREE.Vector3(1, 0, 0);
 const v3UnitY = new THREE.Vector3(0, 1, 0);
 const v3UnitZ = new THREE.Vector3(0, 0, 1);
 
-var worldSize = 1000;
-var defaultDensity = 0.4;
+const worldSize = 1000;
+const defaultDensity = 0.4;
 
 var stats, controls;
 var camera, scene, renderer;
@@ -79,11 +83,6 @@ function addParticles(positions, sizes) {
 
     scene.add(particles);
 }
-///используется из-за возможного
-function value2id(str) {
-
-    return str && str.toUpperCase();
-}
 
 function weight2size(weight) {
 
@@ -139,7 +138,7 @@ function addLabel(node) {
     node.label = true;
 }
 
-function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
+function addNodes(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
 
     if (!iterator)
         return;
@@ -154,7 +153,7 @@ function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
     $.each(iterator, function (key, val) {
 
         var weight = fGetWeight(val);
-        var id = value2id(fGetId(val));
+        var id = fGetId(val);
 
         if (Nodes[id])
             return;//TODO:может быть обновлять объект при повторной загрузке? Пока считаем, что повторное считывание не более чем повторное считывание
@@ -466,17 +465,54 @@ function init() {
     initOctree();
 }
 
-function paintGL() {
+function draw() {
+
     update();
-    requestAnimationFrame(paintGL);
+    requestAnimationFrame(draw);
     renderer.render(scene, camera);
 }
+
+NodeShader = {
+
+    uniforms: {
+
+        "vpSizeY":  { type: "f", value: 1.0 }
+
+    },
+
+    vertexShader: [
+
+        "uniform float vpSizeY;",
+        "attribute float customSize;",
+
+        "void main() {",
+
+        "vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+        "gl_Position = projectionMatrix * mvPosition;",
+
+        //http://stackoverflow.com/questions/25780145/gl-pointsize-corresponding-to-world-space-size
+        "gl_PointSize = vpSizeY * projectionMatrix[1][1] * customSize / gl_Position.w;",
+
+        "}"
+
+    ].join("\n"),
+
+    fragmentShader: [
+
+        "void main() {",
+
+        "gl_FragColor = vec4( 0.5, 0.7, 0.4, 0.3 );",
+        "}"
+
+    ].join("\n")
+
+};
 
 function initMaterials() {
 
     var canvasSize = new THREE.Vector2(renderer.context.canvas.width, renderer.context.canvas.height);
 
-    var nodeMaterial = new THREE.ShaderMaterial(THREE.NodeShader);
+    var nodeMaterial = new THREE.ShaderMaterial(NodeShader);
     nodeMaterial.uniforms.vpSizeY.value = canvasSize.y;
     nodeMaterial.transparent = true;
     nodeMaterial.depthWrite = false;
@@ -503,39 +539,35 @@ function initMaterials() {
     }
 }
 
-THREE.NodeShader = {
-
-    uniforms: {
-
-        "vpSizeY":  { type: "f", value: 1.0 }
-
+return {
+    constructInstance: function constructInstance () {
+        if (instance) {
+            return instance;
+        }
+        if (this && this.constructor === constructInstance) {
+            instance = this;
+        } else {
+            return new constructInstance();
+        }
     },
 
-    vertexShader: [
+    init: function() {
+        init();
+    },
 
-        "uniform float vpSizeY;",
-        "attribute float customSize;",
+    draw: function() {
+        draw();
+    },
 
-        "void main() {",
+    addNodes: function(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
 
-            "vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
-            "gl_Position = projectionMatrix * mvPosition;",
+        addNodes(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets);
+    },
 
-            //http://stackoverflow.com/questions/25780145/gl-pointsize-corresponding-to-world-space-size
-            "gl_PointSize = vpSizeY * projectionMatrix[1][1] * customSize / gl_Position.w;",
+    addLinks: function() {
+        addLinks();
+    }
+}
 
-        "}"
-
-    ].join("\n"),
-
-    fragmentShader: [
-
-        "void main() {",
-
-            "gl_FragColor = vec4( 0.5, 0.7, 0.4, 0.3 );",
-        "}"
-
-    ].join("\n")
-
-};
+}());
 
