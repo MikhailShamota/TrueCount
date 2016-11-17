@@ -6,14 +6,17 @@ const v3UnitX = new THREE.Vector3(1, 0, 0);
 const v3UnitY = new THREE.Vector3(0, 1, 0);
 const v3UnitZ = new THREE.Vector3(0, 0, 1);
 
+var worldSize = 1000;
+var defaultDensity = 0.4;
+
 var stats, controls;
 var camera, scene, renderer;
 var octree;
 
-var worldSize = 1000;
-var defaultDensity = 0.4;
 var Links;
 var Nodes = {};
+
+var Materials;
 
 function getRandomUnitVector() {
 
@@ -44,8 +47,13 @@ function addParticles(positions, sizes) {
     if (!positions || !sizes)
         return;
 
+
+
+    /*
     var vShader = $("#NodeVertexShader");
     var fShader = $("#NodeFragmentShader");
+
+
 
     var particleMaterial = new THREE.ShaderMaterial({
 
@@ -62,12 +70,12 @@ function addParticles(positions, sizes) {
         depthWrite: false,
         blending: THREE.AdditiveBlending
     });
-
+*/
     var geometry = new THREE.BufferGeometry();
     geometry.addAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.addAttribute("customSize", new THREE.BufferAttribute(sizes, 1));
 
-    var particles = new THREE.Points(geometry, particleMaterial);
+    var particles = new THREE.Points(geometry, /*particleMaterial*/Materials.node);
 
     scene.add(particles);
 }
@@ -116,7 +124,7 @@ function label(txt, billboardSize) {
     var texture = new THREE.Texture(canvas);
     texture.needsUpdate = true;
 
-    var spriteMaterial = new THREE.SpriteMaterial({map: texture, });
+    var spriteMaterial = new THREE.SpriteMaterial({map: texture });
     var sprite = new THREE.Sprite(spriteMaterial);
     sprite.scale.set(billboardSize, billboardSize, 1);
 
@@ -128,6 +136,7 @@ function addLabel(node) {
     var sprite = label(node2hint(node), node.size * 2 /*R x 2*/ );
     sprite.position.set(node.position.x, node.position.y, node.position.z);
     scene.add(sprite);
+    node.label = true;
 }
 
 function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
@@ -175,6 +184,7 @@ function doSelect(iterator, fGetId, fGetParentId, fGetWeight, fGetTargets) {
             childSize: defaultDensity * size / sizeWeighted,//размер для элементов внутри
             children: {},
             visible: true,
+            label: false,
             position: getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0),
             document: val,
             targets: fGetTargets && fGetTargets(val)
@@ -235,8 +245,9 @@ function branch(from, to) {
 
         v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
     }
-
+/*
     var canvasSize = new THREE.Vector2(renderer.context.canvas.width, renderer.context.canvas.height);
+
 
     var material = new THREE.MeshLineMaterial( {
         useMap: false,
@@ -251,6 +262,7 @@ function branch(from, to) {
         depthWrite: false,
         blending: THREE.AdditiveBlending
     });
+    */
 
     var curve = new THREE.QuadraticBezierCurve3 (v1, v3, v2);
     var geometry = new THREE.Geometry();
@@ -265,7 +277,7 @@ function branch(from, to) {
         function(p) {return s2 * p + s1 * (1 - p)}//size changes linear from start to end
     );
 
-    return new THREE.Mesh(line.geometry, material);
+    return new THREE.Mesh(line.geometry, /*material*/ Materials.branch);
 }
 
 function addLinks() {
@@ -358,6 +370,7 @@ function initStats() {
 }
 
 function initControls() {
+
     controls = new THREE.OrbitControls( camera, renderer.domElement );
     //controls.addEventListener( 'change', render ); // add this only if there is no animation loop (requestAnimationFrame)
     controls.enableDamping = true;
@@ -435,9 +448,10 @@ function onMouseClick(event) {
             if (!node.visible)
                 return;
 
-            addLabel(node);
+            if (!node.label)
+                addLabel(node);
 
-            console.log(id);
+            console.log(Nodes[id].document);
 
             //found++;
         }
@@ -446,6 +460,7 @@ function onMouseClick(event) {
 
 function init() {
     initGL();
+    initMaterials();
     initStats();
     initControls();
     initOctree();
@@ -456,3 +471,71 @@ function paintGL() {
     requestAnimationFrame(paintGL);
     renderer.render(scene, camera);
 }
+
+function initMaterials() {
+
+    var canvasSize = new THREE.Vector2(renderer.context.canvas.width, renderer.context.canvas.height);
+
+    var nodeMaterial = new THREE.ShaderMaterial(THREE.NodeShader);
+    nodeMaterial.uniforms.vpSizeY.value = canvasSize.y;
+    nodeMaterial.transparent = true;
+    nodeMaterial.depthWrite = false;
+    nodeMaterial.blending = THREE.AdditiveBlending;
+
+    var branchMaterial = new THREE.MeshLineMaterial( {
+        useMap: false,
+        color: new THREE.Color(0.15,0.4,0.15),
+        transparent:true,
+        opacity: 0.15,
+        resolution: canvasSize,
+        sizeAttenuation: true,
+        lineWidth: 0.8,//see size changes function bellow
+        near: camera.near,
+        far: camera.far,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+
+    Materials = {
+
+        "node" : nodeMaterial,
+        "branch" : branchMaterial
+    }
+}
+
+THREE.NodeShader = {
+
+    uniforms: {
+
+        "vpSizeY":  { type: "f", value: 1.0 }
+
+    },
+
+    vertexShader: [
+
+        "uniform float vpSizeY;",
+        "attribute float customSize;",
+
+        "void main() {",
+
+            "vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+            "gl_Position = projectionMatrix * mvPosition;",
+
+            //http://stackoverflow.com/questions/25780145/gl-pointsize-corresponding-to-world-space-size
+            "gl_PointSize = vpSizeY * projectionMatrix[1][1] * customSize / gl_Position.w;",
+
+        "}"
+
+    ].join("\n"),
+
+    fragmentShader: [
+
+        "void main() {",
+
+            "gl_FragColor = vec4( 0.5, 0.7, 0.4, 0.3 );",
+        "}"
+
+    ].join("\n")
+
+};
+
