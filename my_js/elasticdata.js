@@ -130,9 +130,10 @@ function getData(body) {
                     xhr.open('post', elasticURL + '/_search/scroll');
                     xhr.send(stringBody);
                     console.log(result.hits.hits.length + " hits loaded");
-                } else
-                    runData(result);
+                } else {
 
+                    runData(result);
+                }
             } else {
 
                 console.error(xhr.statusText);
@@ -140,10 +141,9 @@ function getData(body) {
         }
     }
 
-    //runData(result);
-
 }
 
+/*
 function getData3(body) {
 
     var elasticURL = 'http://elastic.axapta.local:80';
@@ -187,7 +187,7 @@ function getData3(body) {
         runData(result);
     }
 }
-
+*/
 function runData(json) {
 
     var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
@@ -201,26 +201,8 @@ function runData(json) {
     TrueCount.drawNodes();
     TrueCount.drawLinks();
 }
-
-function getData2(payload) {
 /*
-    //$.getJSON("http://elastic.axapta.local:80/ks4/graph/_search", {async:false,cache:false}, function (json) {
-    $.post("http://elastic.axapta.local:80/ks4/graph/_search", payload, function(json, textStatus) {
-
-        console.log("connect to Elastic:" + textStatus);//textStatus contains the status: success, error, etc
-
-        var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
-        var hits = json["hits"].hits;
-        var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
-
-        doSelect(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
-        doSelect(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
-        doSelect(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
-
-        addLinks();
-    }, "json");
-
-    return;*/
+function getData2(payload) {
 
     var socket = io("http://172.20.0.121:3228");
 
@@ -245,3 +227,4 @@ function getData2(payload) {
 
     });
 }
+    */

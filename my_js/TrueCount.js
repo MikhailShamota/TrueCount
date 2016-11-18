@@ -379,6 +379,7 @@ var TrueCount = (function () {
         renderer.setSize(WIDTH, HEIGHT);
         renderer.sortObjects = false;
         renderer.domElement.addEventListener("click", onMouseClick);
+        renderer.domElement.addEventListener("dblclick", onMouseDblClick);
 
         document.body.appendChild(renderer.domElement);
 
@@ -436,6 +437,11 @@ var TrueCount = (function () {
         } );
     }
 
+    function onMouseDblClick(event) {
+
+        showLinked();//hide highlighted elements
+    }
+
     function onMouseClick(event) {
 
         var mouse = new THREE.Vector2();
@@ -458,7 +464,6 @@ var TrueCount = (function () {
             raycaster.ray.direction);
 
         var boundingSphere = new THREE.Sphere();
-        var found = 0;
 
         $.each(octreeObjects, function(key, val) {
 
@@ -470,9 +475,6 @@ var TrueCount = (function () {
             boundingSphere.center = val.position;
             boundingSphere.radius = val.radius;
 
-            //if (found > 10)
-               // return;
-
             if (raycaster.ray.intersectSphere(boundingSphere)) {
                 //var mesh = new THREE.Mesh(new THREE.SphereGeometry(val.radius,10,10),new THREE.MeshBasicMaterial({color:0xffffffff}));
                 //mesh.position.set(boundingSphere.center.x,boundingSphere.center.y,boundingSphere.center.z);
@@ -483,18 +485,14 @@ var TrueCount = (function () {
                 if (!node.visible)
                     return;
 
-                /*if (!node.label)
-                    addLabel(node);*/
-
                 console.log(Nodes[id].document);
 
                 showLinked(node);
-                found++;
             }
         });
 
-        if (found == 0)
-            showLinked();
+        /*if (found == 0)
+            showLinked();*/
     }
 
     function init() {
