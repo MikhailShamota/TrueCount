@@ -123,11 +123,12 @@ function runData(json) {
     var hits = json["hits"].hits;
     var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
-    topagg && TrueCount.addNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
-    agg && TrueCount.addNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
-    hits && TrueCount.addNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
+    topagg && TrueCount.loadNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
+    agg && TrueCount.loadNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
+    hits && TrueCount.loadNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
 
-    TrueCount.addLinks();
+    TrueCount.drawNodes();
+    TrueCount.drawLinks();
 }
 
 function getData2(payload) {
