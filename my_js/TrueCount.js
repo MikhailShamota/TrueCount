@@ -84,7 +84,7 @@ var TrueCount = (function () {
 
     function weight2size(weight) {
 
-        return weight && Math.cbrt(weight) || 1;// * defaultDocumentSize / defaultDocumentDensity;
+        return weight && Math.pow(weight, 1/3) || 1;// * defaultDocumentSize / defaultDocumentDensity;
     }
 
     function node2hint(node) {
@@ -280,12 +280,11 @@ var TrueCount = (function () {
         //полная перестройка узлов
         //scene.remove(mesh);
 
-        var mesh = new THREE.Mesh();
-
-        if (!Nodes)
+        if (!nodes)
             return;
 
-        //var sceneNextId = scene.children.length;
+        var mesh = new THREE.Mesh();
+
         //var i = 0;
 
         $.each(nodes, function(id, element) {
@@ -298,7 +297,7 @@ var TrueCount = (function () {
             $.each(targets, function(key, target) {
 
                 var nodeFrom = element;
-                var nodeTo = Nodes[target.id];//search in global
+                var nodeTo = nodes[target.id];//search in global
 
                 if (!nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible)
                     return;
@@ -308,8 +307,6 @@ var TrueCount = (function () {
 
                 mesh.add(branch(nodeFrom, nodeTo, material));
 
-                //nodeFrom.targets[key].sceneIndex = sceneNextId;//номер в сцене
-                //nodeFrom.targets[key].index = i;//порядковый номер в геометрии, которая в сцене
                 //i++;
             });
         });
@@ -520,7 +517,8 @@ var TrueCount = (function () {
         uniforms: {
 
             "vpSizeY":  { type: "f", value: 1.0 },
-            "opacity":  { type: "f", value: 1.0 }
+            "opacity":  { type: "f", value: 1.0 },
+            "color": { type: "v3", value: null}
         },
 
         vertexShader: [
@@ -543,9 +541,12 @@ var TrueCount = (function () {
         fragmentShader: [
 
             "uniform float opacity;",
+            "uniform vec3 color;",
+
             "void main() {",
 
-            "gl_FragColor = vec4( 0.5, 0.7, 0.4, opacity );",
+            //"gl_FragColor = vec4( 0.5, 0.7, 0.4, opacity );",
+            "gl_FragColor = vec4(color, opacity);",
             "}"
 
         ].join("\n")
@@ -558,13 +559,15 @@ var TrueCount = (function () {
 
         var nodeMaterial = new THREE.ShaderMaterial(NodeShader);
         nodeMaterial.uniforms.vpSizeY.value = canvasSize.y;
+        nodeMaterial.uniforms.color.value = new THREE.Color(0.5, 0.7, 0.4);
         nodeMaterial.uniforms.opacity.value = SceneElementOpacity;
         nodeMaterial.transparent = true;
         nodeMaterial.depthWrite = false;
         nodeMaterial.blending = THREE.AdditiveBlending;
 
         var nodeShowMaterial = nodeMaterial.clone();
-        nodeShowMaterial.uniforms.opacity.value = SceneElementOpacity * 2;
+        nodeShowMaterial.uniforms.opacity.value = 0.25;
+        nodeShowMaterial.uniforms.color.value = new THREE.Color(0.6, 1.0, 0.6);
 
         var branchMaterial = new THREE.MeshLineMaterial( {
 

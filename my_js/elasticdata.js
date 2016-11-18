@@ -33,7 +33,9 @@ function getHitsTargets(obj) {
     $.each(docs, function(key, target) {
 
         targets[i] = {
-            id: value2id(target["this@source"]),
+
+            //id: value2id(target["this@source"]),
+            id: target["this@source"],
             weight: 1
         };
         i++;
@@ -74,6 +76,75 @@ function getAggBucketsTargets(obj) {
 }
 
 function getData(body) {
+
+    var elasticURL = 'http://elastic.axapta.local:80';
+    var xhr = new XMLHttpRequest();
+    var path = elasticURL + '/ks4/graph/_search?scroll=3m';
+    var stringBody = JSON.stringify(body);
+
+    xhr.open('post', path, false);
+    xhr.onload = startScrolling;
+    //Отсылаем запрос, в параметрах body: string
+    xhr.send(stringBody)
+
+    var result;
+    var scroll_id;
+
+    function startScrolling(e) {
+
+        if (xhr.readyState === 4) {
+
+            if (xhr.status === 200) {
+
+                //Получили первую страницу результатов
+                result = JSON.parse(xhr.response);
+                //составляем новый запрос
+                scroll_id = result._scroll_id;
+                stringBody = JSON.stringify({
+
+                    "scroll": "1m",
+                    "scroll_id": scroll_id
+                });
+
+                xhr.open('post', elasticURL + '/_search/scroll');
+                xhr.onload = continueScrolling;
+                xhr.send(stringBody);
+                console.log(result.hits.hits.length);
+            } else {
+
+                console.error(xhr.statusText);
+            }
+        }
+    };
+
+    function continueScrolling(e) {
+
+        if (xhr.readyState === 4) {
+
+            if (xhr.status === 200) {
+
+                var objResponse = JSON.parse(xhr.response);
+                if (objResponse.hits.hits.length !== 0) {
+
+                    result.hits.hits = result.hits.hits.concat(objResponse.hits.hits)
+                    xhr.open('post', elasticURL + '/_search/scroll');
+                    xhr.send(stringBody);
+                    console.log(result.hits.hits.length + " hits loaded");
+                } else
+                    runData(result);
+
+            } else {
+
+                console.error(xhr.statusText);
+            }
+        }
+    }
+
+    //runData(result);
+
+}
+
+function getData3(body) {
 
     var elasticURL = 'http://elastic.axapta.local:80';
     var xhr = new XMLHttpRequest();
