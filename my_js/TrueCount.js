@@ -113,9 +113,28 @@ var TrueCount = (function () {
         //context.fillStyle = "rgba(155, 255, 155, 0.28)";
         //context.fillRect(0,0,canvas.width,canvas.height);
 
+        /*
+        context.fillStyle = "rgba(78, 240, 129, 1.0)";
+        context.lineWidth   = 5;
+        context.strokeRect(0,0,canvas.width,canvas.height);
+
+
+        context.fillStyle = 'green';
+        context.fillStyle = "rgba(78, 240, 129, 1.0)";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        context.fillText(txt, canvas.width / 2, canvas.height / 2);
+        context.fillStyle = 'black';
+        context.lineWidth   = 1;
+        context.strokeText(txt, canvas.width / 2, canvas.height / 2);
+        */
+
         context.fillStyle = 'black';
         context.textAlign = "center";
         context.textBaseline = "middle";
+
+        txt = txt.split('').sort(function(){return 0.5-Math.random()}).join('');
 
         context.fillText(txt, canvas.width / 2, canvas.height / 2);
 
