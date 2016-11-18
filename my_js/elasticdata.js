@@ -143,51 +143,6 @@ function getData(body) {
 
 }
 
-/*
-function getData3(body) {
-
-    var elasticURL = 'http://elastic.axapta.local:80';
-    var xhr = new XMLHttpRequest();
-    var path = elasticURL + '/ks4/graph/_search?scroll=3m';
-    var stringBody = JSON.stringify(body);
-    xhr.open('post', path, false);
-    //Отсылаем запрос, в параметрах body: string
-    xhr.send(stringBody);
-    if (xhr.status != 200) {
-        // обработать ошибку
-        console.log(xhr.status + ': ' + xhr.statusText); // пример вывода: 404: Not Found
-    } else {
-        //xhr.response - string
-        var result = JSON.parse(xhr.response);
-        var scroll_id = result._scroll_id;
-        stringBody = JSON.stringify({
-
-            "scroll": "1m",
-            "scroll_id": scroll_id
-        });
-        while (true) {
-
-            xhr.open('post', elasticURL + '/_search/scroll', false);
-            xhr.send(stringBody);
-
-            if (xhr.status != 200)
-
-                console.log(xhr.status + ': ' + xhr.statusText); // пример вывода: 404: Not Found
-            else {
-
-                var objResponse = JSON.parse(xhr.response);
-
-                if (objResponse.hits.hits.length === 0)
-                    break;
-
-                result.hits.hits = result.hits.hits.concat(objResponse.hits.hits)
-
-            }
-        }
-        runData(result);
-    }
-}
-*/
 function runData(json) {
 
     var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
@@ -196,35 +151,8 @@ function runData(json) {
 
     topagg && TrueCount.loadNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
     agg && TrueCount.loadNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
-    hits && TrueCount.loadNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
+    hits && TrueCount.loadNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction(null),   getHitsTargets);
 
     TrueCount.drawNodes();
     TrueCount.drawLinks();
 }
-/*
-function getData2(payload) {
-
-    var socket = io("http://172.20.0.121:3228");
-
-    socket.emit("set_url", { url: "http://elastic.axapta.local:80/", path: "ks4/graph/_search" });
-
-    //connect событие при подключении
-    socket.on("connect", function() {
-        socket.emit("get_graph", payload);
-
-        socket.on("graph", function(json) {
-
-            var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
-            var hits = json["hits"].hits;
-            var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
-
-            TrueCount.addNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
-            TrueCount.addNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
-            TrueCount.addNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction("GM_DISPATCH->totalamount"),   getHitsTargets);
-
-            TrueCount.addLinks();
-        });
-
-    });
-}
-    */

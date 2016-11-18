@@ -134,7 +134,7 @@ var TrueCount = (function () {
         context.textAlign = "center";
         context.textBaseline = "middle";
 
-        txt = txt.split('').sort(function(){return 0.5-Math.random()}).join('');
+        //txt = txt.split('').sort(function(){return 0.5-Math.random()}).join('');
 
         context.fillText(txt, canvas.width / 2, canvas.height / 2);
 
