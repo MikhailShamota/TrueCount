@@ -12,7 +12,7 @@ var TrueCount = (function () {
     const v3UnitZ = new THREE.Vector3(0, 0, 1);
 
     const worldSize = 1000;
-    const defaultDensity = 0.4;
+    const defaultDensity = 0.2;
 
     const SceneElementOpacity = 0.15;
     const SceneElementFadeOpacity = 0.05;
@@ -89,7 +89,7 @@ var TrueCount = (function () {
 
     function node2hint(node) {
 
-        return node.id + ":" + node.weight;
+        return node.id;// + ":" + node.weight;
     }
 
     function label(txt, billboardSize) {
@@ -105,7 +105,7 @@ var TrueCount = (function () {
 
         do {
 
-            context.font = "Bold " + fontSizes[i++] + 'px Arial';
+            context.font = "Bold " + fontSizes[i++] + 'px Arial Narrow';
             textDimensions = context.measureText(txt);
         } while (textDimensions.width >= canvas.width);
 
@@ -402,7 +402,7 @@ var TrueCount = (function () {
 
         document.body.appendChild(renderer.domElement);
 
-        scene.background = new THREE.Color(0x181818);
+        scene.background = new THREE.Color(0x383838);
     }
     /*
      function resizeGL(canvas) {
@@ -427,7 +427,7 @@ var TrueCount = (function () {
     function initControls() {
 
         controls = new THREE.OrbitControls( camera, renderer.domElement );
-        //controls.addEventListener( 'change', render ); // add this only if there is no animation loop (requestAnimationFrame)
+
         controls.enableDamping = true;
         controls.dampingFactor = 0.25;
         controls.enableZoom = true;
@@ -589,7 +589,7 @@ var TrueCount = (function () {
         var branchMaterial = new THREE.MeshLineMaterial( {
 
             useMap: false,
-            color: new THREE.Color(0.15, 0.4, 0.15),
+            color: new THREE.Color(0.15, 0.25, 0.15),
             transparent:true,
             opacity: SceneElementOpacity,
             resolution: canvasSize,
