@@ -65,8 +65,21 @@ var TrueCount = (function () {
 
         $.each(nodes, function (id, node) {
 
+            /*
+            *
+            * CALCULATE POSITION
+            *
+            */
+            node.position = node.position || node.getPositionRandOnParentSphere();//set position if not
             node.position.toArray(positions, i * 3);
             sizes[i] = node.visible && node.size || 0;
+
+            /*
+            *
+            * SAVE IN OCTREE
+            *
+             */
+            octree.addObjectData(node.id, node);//<--overrided
 
             i++;
         });
@@ -195,6 +208,11 @@ var TrueCount = (function () {
 
             size = sizeWeighted * (parent && parent.sizeScale || size / sizeWeighted);//итоговый размер - размер нормализованный по самому больщому элементу (i=0)
 
+            /*
+            *
+            * CREATING NODE OBJECT
+            *
+            */
             var obj = {
 
                 id: id,
@@ -207,9 +225,25 @@ var TrueCount = (function () {
                 children: {},
                 visible: true,
                 label: false,
-                position: getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0),
+                //position: getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0),
+                //position: v3Zero,//default
                 document: val,
-                targets: fGetTargets && fGetTargets(val)
+                targets: fGetTargets && fGetTargets(val),
+
+                //Spherical random distribution method (very fast)
+                getPositionRandOnParentSphere: function() {
+
+                    return getRandPosOnSphere(parent && parent.position || v3Zero, parent && parent.size || 0);
+                },
+
+                //Set position iterable by pull and push forces (slow)
+                getPositionByGravitation: function() {
+
+                    var pull = v3Zero;//pull force of branches
+                    var push = v3Zero;//push force of nodes
+
+
+                }
             };
 
             /*obj.position.toArray(positions, obj.index * 3);
@@ -222,7 +256,7 @@ var TrueCount = (function () {
                 parent.children[obj.id] = obj;
             }
 
-            octree.addObjectData(obj.id, obj);//<--overrided
+            //octree.addObjectData(obj.id, obj);//<--overrided
 
             Nodes[id] = obj;
 
@@ -504,7 +538,7 @@ var TrueCount = (function () {
                 if (!node.visible)
                     return;
 
-                console.log(Nodes[id].document);
+                console.log(node.document);
 
                 showLinked(node);
             }
