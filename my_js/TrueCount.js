@@ -92,12 +92,16 @@ var TrueCount = ( function () {
 
                 fPull.add( vec );//branch Hooke F = -k * x
                 //fPush.add( vec.clone().normalize().divideScalar( Math.max( vec.lengthSq(),0.001 ) ) );//node Coulomb
-            } );
+            });
 
-            var neighbors = octree.search( p, this.size * 10 );
+            var neighbors = octree.search( p, this.size * 25 );
             neighbors && $.each( neighbors, function( key, data ) {
 
                 var id = data.object;
+
+                if ( id == this.id )
+                    return;
+
                 var node = Nodes[id];
 
                 var vec = node.position.clone().sub( p );
@@ -105,7 +109,7 @@ var TrueCount = ( function () {
                 fPush.add( vec.clone().normalize().divideScalar( Math.max( vec.lengthSq(),0.001 ) ) );//node Coulomb
             });
 
-            fPull = fPull.multiplyScalar( 1.0 );
+            fPull = fPull.multiplyScalar( 0.1 );
             fPush = fPush.multiplyScalar( worldSize*worldSize/defaultDensity );
 
             f.add( fPull ).sub( fPush );
