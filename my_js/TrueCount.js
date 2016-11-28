@@ -12,12 +12,6 @@ var TrueCount = ( function () {
         CURVE: 2
     }
 
-    const STYLEPOS = {
-
-        SPHERE: 0,
-        ATTRACTION: 1
-    }
-
     const v3Zero  = new THREE.Vector3( 0, 0, 0 );
     const v3UnitX = new THREE.Vector3( 1, 0, 0 );
     const v3UnitY = new THREE.Vector3( 0, 1, 0 );
@@ -26,11 +20,11 @@ var TrueCount = ( function () {
     const worldSize = 1000;
     const defaultDensity = 0.15;
 
-    const SceneElementOpacity = 0.15;
+    const SceneElementOpacity = 0.35;
     const SceneElementFadeOpacity = 0.05;
 
     var BranchesLineStyle = STYLELINE.CURVE;
-    var NodesPlacementStyle = STYLEPOS.ATTRACTION;
+    var NodesAttractionIterations = 150;
 
     var stats, controls;
     var camera, scene, renderer;
@@ -49,34 +43,33 @@ var TrueCount = ( function () {
 
         this.setPosition = function() {
 
-            switch (NodesPlacementStyle) {
+            function getRandomUnitVector() {
 
-                case STYLEPOS.SPHERE:
-                    if (!this.position)
-                        this.setPositionRandOnParentSphere();
-                    break;
+                var a = new THREE.Euler(
+                    Math.random() * 2 * Math.PI,
+                    Math.random() * 2 * Math.PI,
+                    Math.random() * 2 * Math.PI,
+                    'XYZ'
+                );
 
-                case STYLEPOS.ATTRACTION:
-                    this.position ? this.setPositionByGravitation() : this.setPositionRandOnParentSphere();
-                    break;
+                return v3UnitX.clone().applyEuler( a );
+            };
+
+            const kCoulomb = 0.1;
+            const kHooke = 0.1;
+
+            if (!this.position) {
+
+                this.position = getRandomUnitVector().multiplyScalar(this.parent && this.parent.size || 0).add(this.parent && this.parent.position || v3Zero);
+                return;
             }
-        };
-
-        this.setPositionRandOnParentSphere = function() {//Spherical random distribution method ( very fast )
-
-            this.position = getRandomUnitVector().multiplyScalar( this.parent && this.parent.size || 0 ).add( this.parent && this.parent.position || v3Zero );
-        };
-
-        this.setPositionByGravitation = function() {//Set position iterable by pull and push forces ( slow )
 
             var f = new THREE.Vector3();//sum of node forces
             var fPull = new THREE.Vector3();
             var fPush = new THREE.Vector3();
 
             var p = this.position.clone();
-            if ( !p )//need initial positions
-                return;
-
+            var thisparentid = this.parent && this.parent.id;
             /*
              *
              * GET TARGETS BRANCH FORCE
@@ -88,47 +81,46 @@ var TrueCount = ( function () {
                 if ( !to || !to.position )
                     return;
 
-                var vec = to.position.clone().sub( p );
-
-                fPull.add( vec );//branch Hooke F = -k * x
-                //fPush.add( vec.clone().normalize().divideScalar( Math.max( vec.lengthSq(),0.001 ) ) );//node Coulomb
-            });
-
-            var neighbors = octree.search( p, this.size * 25 );
-            neighbors && $.each( neighbors, function( key, data ) {
-
-                var id = data.object;
-
-                if ( id == this.id )
+                if ( thisparentid != to.parent.id )//DO DISPOSITION ONLY FOR CHILDREN OF A SAME PARENT
                     return;
 
-                var node = Nodes[id];
+                var vec = to.position.clone().sub( p );//vec from this node to target
 
-                var vec = node.position.clone().sub( p );
+                fPull.add( vec );//branch Hooke F = -k * x
+                fPush.add( vec.clone().normalize().multiplyScalar(
 
-                fPush.add( vec.clone().normalize().divideScalar( Math.max( vec.lengthSq(),0.001 ) ) );//node Coulomb
+                    kCoulomb * this.weight * to.weight /
+                    Math.max( vec.lengthSq(), 0.001 )
+                ) );//node Coulomb
+
+                f.add( vec );
+
             });
 
-            fPull = fPull.multiplyScalar( 0.1 );
+
+
+            fPull = fPull.multiplyScalar( kHooke );
             fPush = fPush.multiplyScalar( worldSize*worldSize/defaultDensity );
 
             f.add( fPull ).sub( fPush );
 
-            this.position.lerp( p.add( f ), 0.1 );
+            if ( this.parent && this.parent.id == "GM_DISPATCH" )
+                var x = 1;
+
+            this.position.lerp( p.add( f ), 0.01 );
+            /*
+            *
+            * SET POSITION ON SPHERE SURFACE
+            *
+            */
+            var gravityCenter = this.parent && this.parent.position || v3Zero;
+
+            var r = this.parent && this.parent.size || 0;//sphere radius
+            var rNorm = this.position.clone().sub( gravityCenter ).normalize();//normal
+
+            this.position = rNorm.multiplyScalar( r ).add( gravityCenter );
         };
     };
-
-    function getRandomUnitVector() {
-
-        var a = new THREE.Euler( 
-            Math.random() * 2 * Math.PI,
-            Math.random() * 2 * Math.PI,
-            Math.random() * 2 * Math.PI,
-            'XYZ'
-        );
-
-        return v3UnitX.clone().applyEuler( a );
-    }
 
     //function getRandPosInSphere( center, radius ) {
 
@@ -137,21 +129,7 @@ var TrueCount = ( function () {
 
     function setNodesPosition( nodes ) {
 
-        var placement_iterations = 0;
-
-        switch (NodesPlacementStyle)
-        {
-
-            case STYLEPOS.SPHERE:
-                placement_iterations = 1;
-                break;
-
-            case STYLEPOS.ATTRACTION:
-                placement_iterations = 150;
-                break;
-        }
-
-        for (var j = 0; j < placement_iterations; j++) {
+        for (var j = 0; j < NodesAttractionIterations; j++) {
 
             $.each(nodes, function (id, node) {
 
@@ -228,16 +206,13 @@ var TrueCount = ( function () {
         context.strokeRect( 0,0,canvas.width,canvas.height );
 
 
-        context.fillStyle = 'green';
-        context.fillStyle = "rgba( 78, 240, 129, 1.0 )";
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-
         context.fillText( txt, canvas.width / 2, canvas.height / 2 );
         context.fillStyle = 'black';
         context.lineWidth   = 1;
         context.strokeText( txt, canvas.width / 2, canvas.height / 2 );
-        */
+
+        context.fillStyle = 'white';
+        context.fillRect( 0, 0, canvas.width, canvas.height );*/
 
         context.fillStyle = 'black';
         context.textAlign = "center";
@@ -665,6 +640,7 @@ var TrueCount = ( function () {
             "vpSizeY":  { type: "f", value: 1.0 },
             "opacity":  { type: "f", value: 1.0 },
             "color": { type: "v3", value: null}
+            //"tex": { type: "t", value: THREE.ImageUtils.loadTexture( "2.png" ) }
         },
 
         vertexShader: [
@@ -712,8 +688,10 @@ var TrueCount = ( function () {
         nodeMaterial.blending = THREE.AdditiveBlending;
 
         var nodeShowMaterial = nodeMaterial.clone();
-        nodeShowMaterial.uniforms.opacity.value = 0.25;
-        nodeShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
+        //nodeShowMaterial.uniforms.opacity.value = 0.25;
+        //nodeShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
+        nodeShowMaterial.uniforms.opacity.value = 1.0;
+        nodeShowMaterial.uniforms.color.value = new THREE.Color( 1.0, 1.0, 1.0 );
 
         var branchMaterial = new THREE.MeshLineMaterial( {
 
@@ -723,7 +701,7 @@ var TrueCount = ( function () {
             opacity: SceneElementOpacity,
             resolution: canvasSize,
             sizeAttenuation: true,
-            lineWidth: 0.8,//see size changes function bellow
+            lineWidth: 0.38,//see size changes function
             near: camera.near,
             far: camera.far,
             depthWrite: false,
@@ -732,7 +710,10 @@ var TrueCount = ( function () {
 
         var branchShowMaterial = branchMaterial.clone();
         branchShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
-        branchShowMaterial.blending.value = THREE.NormalBlending;
+        branchShowMaterial.blending.value = THREE.AdditiveBlending;
+        //branchShowMaterial.uniforms.lineWidth.value *= 1.5;
+        //branchShowMaterial.transparent.value = false;
+        //branchShowMaterial.uniforms.opacity = 0.5;
 
         var labelSpriteMaterial = new THREE.SpriteMaterial( {
 
@@ -781,7 +762,7 @@ var TrueCount = ( function () {
 
             scene.remove( NodesMesh );
 
-            setNodesPosition(Nodes);
+            setNodesPosition( Nodes );
 
             NodesMesh = addParticles( Nodes, Materials.node );
         },
