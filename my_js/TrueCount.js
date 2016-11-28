@@ -689,9 +689,9 @@ var TrueCount = ( function () {
 
         var nodeShowMaterial = nodeMaterial.clone();
         //nodeShowMaterial.uniforms.opacity.value = 0.25;
-        //nodeShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
-        nodeShowMaterial.uniforms.opacity.value = 1.0;
-        nodeShowMaterial.uniforms.color.value = new THREE.Color( 1.0, 1.0, 1.0 );
+        nodeShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
+        nodeShowMaterial.uniforms.opacity.value = 0.5;
+        //nodeShowMaterial.uniforms.color.value = new THREE.Color( 1.0, 1.0, 1.0 );
 
         var branchMaterial = new THREE.MeshLineMaterial( {
 
