@@ -56,7 +56,7 @@ var TrueCount = ( function () {
             };
 
             const kCoulomb = 0.1;
-            const kHooke = 0.1;
+            const kHooke = 1.1;
 
             if (!this.position) {
 
@@ -70,6 +70,7 @@ var TrueCount = ( function () {
 
             var p = this.position.clone();
             var thisparentid = this.parent && this.parent.id;
+            var thisweight = this.weight;
             /*
              *
              * GET TARGETS BRANCH FORCE
@@ -89,25 +90,21 @@ var TrueCount = ( function () {
                 fPull.add( vec );//branch Hooke F = -k * x
                 fPush.add( vec.clone().normalize().multiplyScalar(
 
-                    kCoulomb * this.weight * to.weight /
+                    kCoulomb * thisweight * to.weight /
                     Math.max( vec.lengthSq(), 0.001 )
                 ) );//node Coulomb
 
-                f.add( vec );
-
             });
 
-
-
             fPull = fPull.multiplyScalar( kHooke );
-            fPush = fPush.multiplyScalar( worldSize*worldSize/defaultDensity );
+            fPush = fPush.multiplyScalar( 1.0 );
 
             f.add( fPull ).sub( fPush );
 
-            if ( this.parent && this.parent.id == "GM_DISPATCH" )
-                var x = 1;
+            if ( f.lengthSq() < 0.0001 )
+                return;
 
-            this.position.lerp( p.add( f ), 0.01 );
+            this.position.lerp( p.add( f ), 0.1 );
             /*
             *
             * SET POSITION ON SPHERE SURFACE
