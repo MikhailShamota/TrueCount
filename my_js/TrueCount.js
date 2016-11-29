@@ -104,7 +104,7 @@ var TrueCount = ( function () {
             if ( f.lengthSq() < 0.0001 )
                 return;
 
-            this.position.lerp( p.add( f ), 0.1 );
+            this.position.lerp( p.add( f ), 0.01 );
             /*
             *
             * SET POSITION ON SPHERE SURFACE
@@ -152,12 +152,16 @@ var TrueCount = ( function () {
 
             octree.addObjectData( node.id, node );//<--overrided
 
+            node.geometryIndex = i;
+
             i++;
         } );
 
         var geometry = new THREE.BufferGeometry();
         geometry.addAttribute( "position", new THREE.BufferAttribute( positions, 3 ) );
         geometry.addAttribute( "customSize", new THREE.BufferAttribute( sizes, 1 ) );
+        //TODO:
+        //geometry.dynamic = true;
 
         var particles = new THREE.Points( geometry, material );
 
@@ -361,6 +365,8 @@ var TrueCount = ( function () {
 
         var curve = new THREE.QuadraticBezierCurve3(v1, v3, v2);
         var geometry = new THREE.Geometry();
+        //TODO:
+        //geometry.dynamic = true;
 
         switch ( BranchesLineStyle ) {
 
@@ -418,6 +424,9 @@ var TrueCount = ( function () {
 
                 mesh.add( branch( nodeFrom, nodeTo, material ) );
 
+                if (!BranchesMesh)//TODO:
+                    target.meshIndex = mesh.children.length - 1;
+
                 //i++;
             } );
         } );
@@ -464,8 +473,55 @@ var TrueCount = ( function () {
 
     function update() {
 
+
         controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
         stats.update();
+
+/*
+        var geomNodes = NodesMesh && NodesMesh.geometry;
+
+        if ( geomNodes ) {
+
+            var attribute = geomNodes.attributes["position"];
+            $.each( Nodes, function ( id, node ) {
+
+                node.setPosition();
+                attribute.array[node.geometryIndex * 3] = node.position.x;
+                attribute.array[node.geometryIndex * 3 + 1] = node.position.y;
+                attribute.array[node.geometryIndex * 3 + 2] = node.position.z;
+
+                if ( BranchesMesh ) {
+
+                    var targets = node.targets;
+
+                    if (!targets)
+                        return;
+
+                    $.each(targets, function (key, target) {
+
+                        var nodeFrom = node;
+                        var nodeTo = Nodes[target.id];//search in global
+
+                        if (!nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible)
+                            return;
+
+                        if (nodeFrom.id == nodeTo.id)
+                            return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
+
+                        var geom = BranchesMesh.children[target.meshIndex].geometry;
+                        var attr = geom.attributes["position"];
+                        attr.array = branch(nodeFrom, nodeTo, BranchesMesh).geometry.attributes["position"].array;
+                        attr.needsUpdate = true;
+                        //i++;
+                    });
+                }
+            });
+            attribute.needsUpdate = true;
+
+
+        }
+*/
+
     }
 
     function initGL() {
