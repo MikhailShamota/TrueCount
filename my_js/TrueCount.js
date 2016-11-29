@@ -24,7 +24,7 @@ var TrueCount = ( function () {
     const SceneElementFadeOpacity = 0.05;
 
     var BranchesLineStyle = STYLELINE.CURVE;
-    var NodesAttractionIterations = 150;
+    var NodesAttractionIterations = 200;
 
     var stats, controls;
     var camera, scene, renderer;
@@ -56,7 +56,8 @@ var TrueCount = ( function () {
             };
 
             const kCoulomb = 0.1;
-            const kHooke = 1.1;
+            const kHooke = 0.5;
+            const kCoulombRadius = 4;// x Size
 
             if (!this.position) {
 
@@ -71,6 +72,7 @@ var TrueCount = ( function () {
             var p = this.position.clone();
             var thisparentid = this.parent && this.parent.id;
             var thisweight = this.weight;
+            var thissize = this.size;
             /*
              *
              * GET TARGETS BRANCH FORCE
@@ -88,16 +90,29 @@ var TrueCount = ( function () {
                 var vec = to.position.clone().sub( p );//vec from this node to target
 
                 fPull.add( vec );//branch Hooke F = -k * x
-                fPush.add( vec.clone().normalize().multiplyScalar(
-
-                    kCoulomb * thisweight * to.weight /
-                    Math.max( vec.lengthSq(), 0.001 )
-                ) );//node Coulomb
 
             });
 
+            var neighbors = octree && octree.search( p, this.size * kCoulombRadius );
+            neighbors && $.each( neighbors, function( key, neighbor ) {
+
+                var node = Nodes[neighbor.object];
+                if ( !node.visible )
+                    return;
+
+                var vec = node.position.clone().sub( p );//vec from this node to target
+                var vecLen = vec.length - thissize - node.size;
+
+                fPush.add( vec.clone().normalize().multiplyScalar(
+
+                    /*thisweight * node.weight*/1.0 /
+                    Math.max( /*lengthSq()*/vecLen*vecLen, 0.00001 )
+                ) );//node Coulomb
+
+            } );
+
             fPull = fPull.multiplyScalar( kHooke );
-            fPush = fPush.multiplyScalar( 1.0 );
+            fPush = fPush.multiplyScalar( kCoulomb );
 
             f.add( fPull ).sub( fPush );
 
@@ -115,7 +130,7 @@ var TrueCount = ( function () {
             var r = this.parent && this.parent.size || 0;//sphere radius
             var rNorm = this.position.clone().sub( gravityCenter ).normalize();//normal
 
-            this.position = rNorm.multiplyScalar( r ).add( gravityCenter );
+            //this.position = rNorm.multiplyScalar( r ).add( gravityCenter );
         };
     };
 
@@ -131,6 +146,7 @@ var TrueCount = ( function () {
             $.each(nodes, function (id, node) {
 
                 node.setPosition();
+                octree.addObjectData( node.id, node );//<--overrided / add and upd
             });
         }
     }
@@ -150,7 +166,8 @@ var TrueCount = ( function () {
             node.position.toArray( positions, i * 3 );
             sizes[i] = node.visible && node.size || 0;
 
-            octree.addObjectData( node.id, node );//<--overrided
+            //TODO:
+            //octree.addObjectData( node.id, node );//<--overrided
 
             node.geometryIndex = i;
 
