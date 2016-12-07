@@ -77,7 +77,7 @@ function getAggBucketsTargets(obj) {
 
 function getData(body) {
 
-    var elasticURL = 'http://elastic.axapta.local:80';
+    var elasticURL = 'http://10.40.10.125:9200';
     var xhr = new XMLHttpRequest();
     var path = elasticURL + '/ks4/graph/_search?scroll=3m';
     var stringBody = JSON.stringify(body);
@@ -143,15 +143,57 @@ function getData(body) {
 
 }
 
+function runIterator( iterator, fGetId, fGetParentId, fGetWeight, fGetTargets ) {
+
+    if ( !iterator )
+        return;
+
+    $.each( iterator, function ( k, v ) {
+
+        var node = {
+
+            id: fGetId( v ),
+            parent: fGetParentId( v ) || '',
+            weight: fGetWeight( v ),
+            document: v
+        }
+
+        TrueCount.loadNode( node );
+
+        var targets = fGetTargets && fGetTargets( v );
+
+        if ( !targets )
+            return;
+
+        $.each( targets, function( k, v ) {
+
+            var branch = {
+
+                src: node.id,
+                dst: v.id,
+                doc: null,
+                weight: 1
+            }
+
+            TrueCount.loadBranch( branch );
+        });
+    });
+}
+
 function runData(json) {
 
     var topagg = [json["aggregations"] && json["aggregations"]["agg_my"]];
     var hits = json["hits"].hits;
     var agg = json["aggregations"] && json["aggregations"]["agg_my"] && json["aggregations"]["agg_my"].buckets;
 
+    topagg && runIterator(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
+    agg && runIterator(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
+    hits && runIterator(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction(null),   getHitsTargets);
+    /*
     topagg && TrueCount.loadNodes(topagg,    getFieldFunction(null),       getFieldFunction(null),               getFieldFunction("buckets"));
     agg && TrueCount.loadNodes(agg,       getFieldFunction("key"),      getFieldFunction(null),               getFieldFunction("doc_count"),                  getAggBucketsTargets);
     hits && TrueCount.loadNodes(hits,      getFieldFunction("_id"),      getFieldFunction("this@tablename"),   getFieldFunction(null),   getHitsTargets);
+    */
 
     TrueCount.drawNodes();
     TrueCount.drawLinks();

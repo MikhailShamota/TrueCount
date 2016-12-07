@@ -38,6 +38,7 @@ var TrueCount = ( function () {
     var Materials;
 
     var Nodes = {};//TODO: втащить setNodesPosition, и стили
+    var Branches = {};
 
     function Node() {
 
@@ -263,14 +264,11 @@ var TrueCount = ( function () {
         node.label = true;
     }
 
+    /*
     function loadNodes( iterator, fGetId, fGetParentId, fGetWeight, fGetTargets ) {
 
         if ( !iterator )
             return;
-
-        /*var count = iterator.length || 0;
-        var sizes = new Float32Array( count );
-        var positions = new Float32Array( count * 3 );*/
 
         var i = 0;
         //var sceneNextId = scene.children.length;
@@ -295,11 +293,6 @@ var TrueCount = ( function () {
 
             size = sizeWeighted * ( parent && parent.sizeScale || size / sizeWeighted );//итоговый размер - размер нормализованный по самому больщому элементу ( i=0 )
 
-            /*
-            *
-            * CREATING NODE OBJECT
-            *
-            */
             var obj = new Node();
             obj.id = id;
             obj.parent = parent;
@@ -327,10 +320,57 @@ var TrueCount = ( function () {
 
         } );
 
-        //addParticles( positions, sizes );
-        //NodesMesh = addParticles( Nodes, Materials.node );
-
         console.log( i + " objects affected" )
+    }*/
+
+    function loadNode( node ) {
+
+        var id = node.id;
+        var weight = node.weight;
+        var parentId = node.parent || '';
+        var doc = node.document;
+
+        if ( Nodes[id] )
+            return;//TODO:может быть обновлять объект при повторной загрузке? Пока считаем, что повторное считывание не более чем повторное считывание
+
+        var parent = Nodes[parentId];
+
+        var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
+        var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
+        //var sizeWeighted = weight && weight2size( weight.length || weight ) || 1;//размер на основании веса объекта
+
+        if ( parent && !parent.sizeScale )
+            parent.sizeScale = size / sizeWeighted;//первое значение в выборке самое большое. масштаб всех элементов группировки
+
+        size = sizeWeighted * ( parent && parent.sizeScale || size / sizeWeighted );//итоговый размер - размер нормализованный по самому больщому элементу ( i=0 )
+
+        /*
+         *
+         * CREATING NODE OBJECT
+         *
+         */
+        var obj = new Node();
+        obj.id = id;
+        obj.parent = parent;
+        obj.size = size;
+        obj.weight = weight;
+        obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
+        obj.children = {};
+        obj.visible = true;
+        obj.label = false;
+        obj.document = doc;
+        //obj.targets = fGetTargets && fGetTargets( val );
+
+        //obj.prototype = Node;
+
+
+        if ( parent ) {
+
+            parent.visible = false;
+            parent.children[obj.id] = obj;
+        }
+
+        Nodes[id] = obj;
     }
 
     /*
@@ -354,7 +394,7 @@ var TrueCount = ( function () {
         Materials.node.uniforms.opacity.value = opacity;
     }
 
-    function branch( from, to, material ) {
+    function link( from, to, material ) {
 
         var v1 = from.position;
         var v2 = to.position;
@@ -409,7 +449,53 @@ var TrueCount = ( function () {
         return new THREE.Mesh( line.geometry, material );
     }
 
-    function addLinks( nodes, material ) {
+    function loadBranch( branch ) {
+
+        var src = branch.src;
+        var dst = branch.dst;
+        var doc = branch.document;
+        var weight = branch.weight;
+
+        Branches[src] = {
+
+            src: src,
+            dst: dst,
+            doc: doc,
+            weight: weight
+        };
+    }
+
+    function addLinks( branches, material ) {
+
+        var mesh = new THREE.Mesh();
+
+        $.each( branches, function ( k, v ){
+
+            var branch = v;
+
+            var srcNode = Nodes[branch.src];
+            var dstNode = Nodes[branch.dst];
+
+            if ( !srcNode || !dstNode || !srcNode.visible || !dstNode.visible )
+                return;
+
+            if ( srcNode.id == dstNode.id )
+                return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
+
+            mesh.add( link( srcNode, dstNode, material ) );
+
+            if (!BranchesMesh)//TODO:
+                v.meshIndex = mesh.children.length - 1;
+
+            //i++;
+        } );
+
+        scene.add( mesh );
+
+        return mesh;
+    }
+/*
+    function addLinks2( nodes, material ) {
 
         //полная перестройка узлов
         //scene.remove( mesh );
@@ -452,6 +538,7 @@ var TrueCount = ( function () {
 
         return mesh;
     }
+*/
 
     function getLinkedNodes( nodeFrom, pathOfNodes ) {
 
@@ -823,9 +910,14 @@ var TrueCount = ( function () {
             draw();
         },
 
-        loadNodes: function( iterator, fGetId, fGetParentId, fGetWeight, fGetTargets ) {
+        loadNode: function( node ) {
 
-            loadNodes( iterator, fGetId, fGetParentId, fGetWeight, fGetTargets );
+            loadNode( node );//-->Nodes
+        },
+
+        loadBranch: function( branch ) {
+
+            loadBranch( branch )//-->Branches
         },
 
         drawNodes: function() {
@@ -840,7 +932,7 @@ var TrueCount = ( function () {
         drawLinks: function() {
 
             scene.remove( BranchesMesh );
-            BranchesMesh = addLinks( Nodes, Materials.branch );
+            BranchesMesh = addLinks( Branches, Materials.branch );
         }
     }
 
