@@ -21,7 +21,7 @@ var TrueCount = ( function () {
     const defaultDensity = 0.15;
 
     const SceneElementOpacity = 0.35;
-    const SceneElementFadeOpacity = 0.05;
+    const SceneElementFadeOpacity = 0.075;
 
     var BranchesLineStyle = STYLELINE.CURVE;
     var NodesAttractionIterations = 200;
@@ -456,46 +456,52 @@ var TrueCount = ( function () {
         var doc = branch.document;
         var weight = branch.weight;
 
-        Branches[src] = {
+        if ( !Branches[src] )
+            Branches[src] = [];
+
+        Branches[src].push ({
 
             src: src,
             dst: dst,
             doc: doc,
             weight: weight
-        };
+        });
     }
 
     function addLinks( branches, material ) {
 
         var mesh = new THREE.Mesh();
 
-        $.each( branches, function ( k, v ){
+        $.each( branches, function ( key, val ){
 
-            var branch = v;
+            var branchesFrom = val;
 
-            var srcNode = Nodes[branch.src];
-            var dstNode = Nodes[branch.dst];
+            $.each( branchesFrom, function ( k, v ) {
 
-            if ( !srcNode || !dstNode || !srcNode.visible || !dstNode.visible )
-                return;
+                var srcNode = Nodes[v.src];
+                var dstNode = Nodes[v.dst];
 
-            if ( srcNode.id == dstNode.id )
-                return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
+                if (!srcNode || !dstNode || !srcNode.visible || !dstNode.visible)
+                    return;
 
-            mesh.add( link( srcNode, dstNode, material ) );
+                if (srcNode.id == dstNode.id)
+                    return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
 
-            if (!BranchesMesh)//TODO:
-                v.meshIndex = mesh.children.length - 1;
+                mesh.add(link(srcNode, dstNode, material));
 
-            //i++;
+                if (!BranchesMesh)//TODO:
+                    v.meshIndex = mesh.children.length - 1;
+
+                //i++;
+            });
         } );
 
         scene.add( mesh );
 
         return mesh;
     }
-/*
-    function addLinks2( nodes, material ) {
+
+    /*function addLinks2( nodes, material ) {
 
         //полная перестройка узлов
         //scene.remove( mesh );
@@ -540,6 +546,23 @@ var TrueCount = ( function () {
     }
 */
 
+    function getBranchesOfNodes( listOfNodes ) {
+
+        if ( !listOfNodes )
+            return;
+
+        var branches = {};
+
+        $.each( listOfNodes, function ( k ) {
+
+            if ( Branches[k] )
+                branches[k] = Branches[k];
+        });
+
+        return branches;
+    }
+
+    //recursive
     function getLinkedNodes( nodeFrom, pathOfNodes ) {
 
         if ( !nodeFrom || pathOfNodes[nodeFrom.id] )
@@ -547,12 +570,12 @@ var TrueCount = ( function () {
 
         pathOfNodes[nodeFrom.id] = nodeFrom;
 
-        if ( !nodeFrom.targets )
+        if ( !Branches[nodeFrom.id] )
             return;//если нет дальнейших шагов
 
-        $.each( nodeFrom.targets, function( key, target ) {
+        $.each( Branches[nodeFrom.id], function( k, v ) {
 
-            getLinkedNodes( Nodes[target.id], pathOfNodes );
+            getLinkedNodes( Nodes[v.dst], pathOfNodes );
         } );
     }
 
@@ -564,7 +587,11 @@ var TrueCount = ( function () {
 
         scene.remove( BranchesMeshShowed );
         scene.remove( NodesMeshShowed );
-        BranchesMeshShowed = addLinks( pathOfNodes, Materials.branchShow );
+
+        //draw links
+        BranchesMeshShowed = addLinks( getBranchesOfNodes( pathOfNodes ), Materials.branchShow );
+
+        //draw nodes
         NodesMeshShowed = addParticles( pathOfNodes, Materials.nodeShow );
 
         $.each( pathOfNodes, function( id, node ) {
