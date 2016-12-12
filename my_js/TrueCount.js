@@ -42,6 +42,11 @@ var TrueCount = ( function () {
 
     function Node() {
 
+        this.branches = function() {
+
+            return Branches[this.id];
+        }
+
         this.setPosition = function() {
 
             function getRandomUnitVector() {
@@ -79,9 +84,10 @@ var TrueCount = ( function () {
              * GET TARGETS BRANCH FORCE
              *
              */
-            this.targets && $.each( this.targets, function( key, target ) {
+            var outBranches = this.branches();
+            outBranches && $.each( outBranches, function( key, target ) {
 
-                var to = Nodes[target.id];
+                var to = Nodes[target.dst];
                 if ( !to || !to.position )
                     return;
 
@@ -468,15 +474,15 @@ var TrueCount = ( function () {
         });
     }
 
-    function addLinks( branches, material ) {
+    function addLinks( nodes, material ) {
 
         var mesh = new THREE.Mesh();
 
-        $.each( branches, function ( key, val ){
+        $.each( nodes, function ( key, val ){
 
-            var branchesFrom = val;
+            var branches = val.branches();
 
-            $.each( branchesFrom, function ( k, v ) {
+            branches && $.each( branches, function ( k, v ) {
 
                 var srcNode = Nodes[v.src];
                 var dstNode = Nodes[v.dst];
@@ -546,22 +552,6 @@ var TrueCount = ( function () {
     }
 */
 
-    function getBranchesOfNodes( listOfNodes ) {
-
-        if ( !listOfNodes )
-            return;
-
-        var branches = {};
-
-        $.each( listOfNodes, function ( k ) {
-
-            if ( Branches[k] )
-                branches[k] = Branches[k];
-        });
-
-        return branches;
-    }
-
     //recursive
     function getLinkedNodes( nodeFrom, pathOfNodes ) {
 
@@ -589,7 +579,7 @@ var TrueCount = ( function () {
         scene.remove( NodesMeshShowed );
 
         //draw links
-        BranchesMeshShowed = addLinks( getBranchesOfNodes( pathOfNodes ), Materials.branchShow );
+        BranchesMeshShowed = addLinks( pathOfNodes, Materials.branchShow );
 
         //draw nodes
         NodesMeshShowed = addParticles( pathOfNodes, Materials.nodeShow );
@@ -959,7 +949,7 @@ var TrueCount = ( function () {
         drawLinks: function() {
 
             scene.remove( BranchesMesh );
-            BranchesMesh = addLinks( Branches, Materials.branch );
+            BranchesMesh = addLinks( Nodes, Materials.branch );
         }
     }
 
