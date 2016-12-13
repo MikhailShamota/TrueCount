@@ -24,7 +24,7 @@ var TrueCount = ( function () {
     const SceneElementFadeOpacity = 0.075;
 
     var BranchesLineStyle = STYLELINE.CURVE;
-    var NodesAttractionIterations = 200;
+    var NodesAttractionIterations = 1;//200
 
     var stats, controls;
     var camera, scene, renderer;
@@ -37,10 +37,25 @@ var TrueCount = ( function () {
 
     var Materials;
 
-    var Nodes = {};//TODO: втащить setNodesPosition, и стили
+    var Nodes = {};
     var Branches = {};
 
-    function Node() {
+    function Node( id ) {
+
+        this.id = id;
+
+        this.parent = null;
+        this.size = null;
+        this.weight = null;
+        this.childSize = null;
+        this.document = null;
+
+        //defaults
+        this.children = {};
+        this.in = 0;
+        this.out = 0;
+        this.visible = true;
+        this.label = false;
 
         this.branches = function() {
 
@@ -165,6 +180,7 @@ var TrueCount = ( function () {
 
         var count = Object.keys( nodes ).length || 0;
         var sizes = new Float32Array( count );
+        var brightness = new Float32Array( count );
         var positions = new Float32Array( count * 3 );
         var i = 0;
 
@@ -172,6 +188,7 @@ var TrueCount = ( function () {
 
             node.position.toArray( positions, i * 3 );
             sizes[i] = node.visible && node.size || 0;
+            brightness[i] = node.out + node.in;
 
             //TODO:
             //octree.addObjectData( node.id, node );//<--overrided
@@ -184,6 +201,7 @@ var TrueCount = ( function () {
         var geometry = new THREE.BufferGeometry();
         geometry.addAttribute( "position", new THREE.BufferAttribute( positions, 3 ) );
         geometry.addAttribute( "customSize", new THREE.BufferAttribute( sizes, 1 ) );
+        geometry.addAttribute( "customBrightness", new THREE.BufferAttribute( brightness, 1 ) );
         //TODO:
         //geometry.dynamic = true;
 
@@ -270,65 +288,6 @@ var TrueCount = ( function () {
         node.label = true;
     }
 
-    /*
-    function loadNodes( iterator, fGetId, fGetParentId, fGetWeight, fGetTargets ) {
-
-        if ( !iterator )
-            return;
-
-        var i = 0;
-        //var sceneNextId = scene.children.length;
-
-        $.each( iterator, function ( key, val ) {
-
-            var weight = fGetWeight( val );
-            var id = fGetId( val );
-
-            if ( Nodes[id] )
-                return;//TODO:может быть обновлять объект при повторной загрузке? Пока считаем, что повторное считывание не более чем повторное считывание
-
-            var parentId = fGetParentId( val ) || '';
-            var parent = Nodes[parentId];
-
-            var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
-            var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
-            //var sizeWeighted = weight && weight2size( weight.length || weight ) || 1;//размер на основании веса объекта
-
-            if ( parent && !parent.sizeScale )
-                parent.sizeScale = size / sizeWeighted;//первое значение в выборке самое большое. масштаб всех элементов группировки
-
-            size = sizeWeighted * ( parent && parent.sizeScale || size / sizeWeighted );//итоговый размер - размер нормализованный по самому больщому элементу ( i=0 )
-
-            var obj = new Node();
-            obj.id = id;
-            obj.parent = parent;
-            obj.size = size;
-            obj.weight = weight;
-            obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
-            obj.children = {};
-            obj.visible = true;
-            obj.label = false;
-            obj.document = val;
-            obj.targets = fGetTargets && fGetTargets( val );
-
-            //obj.prototype = Node;
-
-
-            if ( parent ) {
-
-                parent.visible = false;
-                parent.children[obj.id] = obj;
-            }
-
-            Nodes[id] = obj;
-
-            i++;
-
-        } );
-
-        console.log( i + " objects affected" )
-    }*/
-
     function loadNode( node ) {
 
         var id = node.id;
@@ -336,8 +295,8 @@ var TrueCount = ( function () {
         var parentId = node.parent || '';
         var doc = node.document;
 
-        if ( Nodes[id] )
-            return;//TODO:может быть обновлять объект при повторной загрузке? Пока считаем, что повторное считывание не более чем повторное считывание
+        /*if ( Nodes[id] )
+            return;*/
 
         var parent = Nodes[parentId];
 
@@ -352,23 +311,23 @@ var TrueCount = ( function () {
 
         /*
          *
-         * CREATING NODE OBJECT
+         * CREATING OR UPDATING NODE OBJECT
          *
          */
-        var obj = new Node();
-        obj.id = id;
+        var obj = Nodes[id] || new Node( id );
+
+        //obj.id = id;
         obj.parent = parent;
         obj.size = size;
         obj.weight = weight;
         obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
-        obj.children = {};
-        obj.visible = true;
-        obj.label = false;
         obj.document = doc;
-        //obj.targets = fGetTargets && fGetTargets( val );
 
-        //obj.prototype = Node;
-
+        //obj.children = {};
+        //obj.in = 0;
+        //obj.out = 0;
+        //obj.visible = true;
+        //obj.label = false;
 
         if ( parent ) {
 
@@ -472,6 +431,12 @@ var TrueCount = ( function () {
             doc: doc,
             weight: weight
         });
+
+        var nodeSrc = Nodes[src] || new Node( src );
+        var nodeDst = Nodes[dst] || new Node( dst );
+
+        nodeSrc.out++;
+        nodeDst.in++;
     }
 
     function addLinks( nodes, material ) {
@@ -487,15 +452,15 @@ var TrueCount = ( function () {
                 var srcNode = Nodes[v.src];
                 var dstNode = Nodes[v.dst];
 
-                if (!srcNode || !dstNode || !srcNode.visible || !dstNode.visible)
+                if ( !srcNode || !dstNode || !srcNode.visible || !dstNode.visible )
                     return;
 
-                if (srcNode.id == dstNode.id)
+                if ( srcNode.id == dstNode.id )
                     return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
 
-                mesh.add(link(srcNode, dstNode, material));
+                mesh.add( link( srcNode, dstNode, material ) );
 
-                if (!BranchesMesh)//TODO:
+                if ( !BranchesMesh )//TODO:
                     v.meshIndex = mesh.children.length - 1;
 
                 //i++;
@@ -820,7 +785,12 @@ var TrueCount = ( function () {
         vertexShader: [
 
             "uniform float vpSizeY;",
+
             "attribute float customSize;",
+            "attribute float customBrightness;",
+
+            "varying float brightness;",
+
 
             "void main() {",
 
@@ -829,7 +799,7 @@ var TrueCount = ( function () {
 
             //http://stackoverflow.com/questions/25780145/gl-pointsize-corresponding-to-world-space-size
             "gl_PointSize = vpSizeY * projectionMatrix[1][1] * customSize / gl_Position.w;",
-
+            "brightness = customBrightness;",
             "}"
 
         ].join( "\n" ),
@@ -839,10 +809,12 @@ var TrueCount = ( function () {
             "uniform float opacity;",
             "uniform vec3 color;",
 
+            "varying float brightness;",
+
             "void main() {",
 
             //"gl_FragColor = vec4( 0.5, 0.7, 0.4, opacity );",
-            "gl_FragColor = vec4( color, opacity );",
+            "gl_FragColor = vec4( color, opacity ) * brightness;",
             "}"
 
         ].join( "\n" )
@@ -855,7 +827,7 @@ var TrueCount = ( function () {
 
         var nodeMaterial = new THREE.ShaderMaterial( NodeShader );
         nodeMaterial.uniforms.vpSizeY.value = canvasSize.y;
-        nodeMaterial.uniforms.color.value = new THREE.Color( 0.5, 0.7, 0.4 );
+        nodeMaterial.uniforms.color.value = new THREE.Color( 0.15, 0.25, 0.15 );//new THREE.Color( 0.5, 0.7, 0.4 );
         nodeMaterial.uniforms.opacity.value = SceneElementOpacity;
         nodeMaterial.transparent = true;
         nodeMaterial.depthWrite = false;
