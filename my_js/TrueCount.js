@@ -188,7 +188,7 @@ var TrueCount = ( function () {
 
             node.position.toArray( positions, i * 3 );
             sizes[i] = node.visible && node.size || 0;
-            brightness[i] = node.out + node.in;
+            brightness[i] = node.out + node.in + 1;//+1 let it be - nonbranched node!
 
             //TODO:
             //octree.addObjectData( node.id, node );//<--overrided
@@ -813,8 +813,7 @@ var TrueCount = ( function () {
 
             "void main() {",
 
-            //"gl_FragColor = vec4( 0.5, 0.7, 0.4, opacity );",
-            "gl_FragColor = vec4( color, opacity ) * brightness;",
+            "gl_FragColor = vec4( color * opacity, opacity ) * brightness;",
             "}"
 
         ].join( "\n" )
