@@ -27,8 +27,9 @@ var TrueCount = ( function () {
     var NodesAttractionIterations = 1;//200
 
     var stats, controls;
-    var camera, scene, renderer;
+    var camera, sceneNodes, sceneBranches, renderer, composer;
     var octree;
+    var renderTargetBranches, renderTargetNodes;
 
     var BranchesMesh;
     var BranchesMeshShowed;
@@ -207,7 +208,7 @@ var TrueCount = ( function () {
 
         var particles = new THREE.Points( geometry, material );
 
-        scene.add( particles );
+        sceneNodes.add( particles );
 
         return particles;
     }
@@ -284,7 +285,7 @@ var TrueCount = ( function () {
 
         var sprite = label( node2hint( node ), node.size * 2 /*R x 2*/ );
         sprite.position.set( node.position.x, node.position.y, node.position.z );
-        scene.add( sprite );
+        sceneNodes.add( sprite );
         node.label = true;
     }
 
@@ -316,18 +317,11 @@ var TrueCount = ( function () {
          */
         var obj = Nodes[id] || new Node( id );
 
-        //obj.id = id;
         obj.parent = parent;
         obj.size = size;
         obj.weight = weight;
         obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
         obj.document = doc;
-
-        //obj.children = {};
-        //obj.in = 0;
-        //obj.out = 0;
-        //obj.visible = true;
-        //obj.label = false;
 
         if ( parent ) {
 
@@ -467,55 +461,11 @@ var TrueCount = ( function () {
             });
         } );
 
-        scene.add( mesh );
+        sceneBranches.add( mesh );
 
         return mesh;
     }
 
-    /*function addLinks2( nodes, material ) {
-
-        //полная перестройка узлов
-        //scene.remove( mesh );
-
-        if ( !nodes )
-            return;
-
-        var mesh = new THREE.Mesh();
-
-        //var i = 0;
-
-        $.each( nodes, function( id, element ) {
-
-            var targets = element.targets;
-
-            if ( !targets )
-                return;
-
-            $.each( targets, function( key, target ) {
-
-                var nodeFrom = element;
-                var nodeTo = nodes[target.id];//search in global
-
-                if ( !nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible )
-                    return;
-
-                if ( nodeFrom.id == nodeTo.id )
-                    return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
-
-                mesh.add( branch( nodeFrom, nodeTo, material ) );
-
-                if (!BranchesMesh)//TODO:
-                    target.meshIndex = mesh.children.length - 1;
-
-                //i++;
-            } );
-        } );
-
-        scene.add( mesh );
-
-        return mesh;
-    }
-*/
 
     //recursive
     function getLinkedNodes( nodeFrom, pathOfNodes ) {
@@ -540,8 +490,8 @@ var TrueCount = ( function () {
 
         getLinkedNodes( nodeFrom, pathOfNodes );
 
-        scene.remove( BranchesMeshShowed );
-        scene.remove( NodesMeshShowed );
+        sceneBranches.remove( BranchesMeshShowed );
+        sceneNodes.remove( NodesMeshShowed );
 
         //draw links
         BranchesMeshShowed = addLinks( pathOfNodes, Materials.branchShow );
@@ -559,60 +509,16 @@ var TrueCount = ( function () {
 
     function update() {
 
-
         controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
         stats.update();
-
-/*
-        var geomNodes = NodesMesh && NodesMesh.geometry;
-
-        if ( geomNodes ) {
-
-            var attribute = geomNodes.attributes["position"];
-            $.each( Nodes, function ( id, node ) {
-
-                node.setPosition();
-                attribute.array[node.geometryIndex * 3] = node.position.x;
-                attribute.array[node.geometryIndex * 3 + 1] = node.position.y;
-                attribute.array[node.geometryIndex * 3 + 2] = node.position.z;
-
-                if ( BranchesMesh ) {
-
-                    var targets = node.targets;
-
-                    if (!targets)
-                        return;
-
-                    $.each(targets, function (key, target) {
-
-                        var nodeFrom = node;
-                        var nodeTo = Nodes[target.id];//search in global
-
-                        if (!nodeFrom || !nodeTo || !nodeFrom.visible || !nodeTo.visible)
-                            return;
-
-                        if (nodeFrom.id == nodeTo.id)
-                            return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
-
-                        var geom = BranchesMesh.children[target.meshIndex].geometry;
-                        var attr = geom.attributes["position"];
-                        attr.array = branch(nodeFrom, nodeTo, BranchesMesh).geometry.attributes["position"].array;
-                        attr.needsUpdate = true;
-                        //i++;
-                    });
-                }
-            });
-            attribute.needsUpdate = true;
-
-
-        }
-*/
-
     }
 
     function initGL() {
 
-        scene = new THREE.Scene();
+        //scene = new THREE.Scene();
+        sceneNodes = new THREE.Scene();
+        sceneBranches = new THREE.Scene();
+
         var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
         camera = new THREE.PerspectiveCamera( 75, window.width / window.height, 0.1, 1000000 );
@@ -636,7 +542,10 @@ var TrueCount = ( function () {
 
         document.body.appendChild( renderer.domElement );
 
-        scene.background = new THREE.Color( 0x383838 );
+        /*sceneNodes.background = new THREE.Color( 0x383838 );
+        sceneBranches.background = new THREE.Color( 0x383838 );*/
+        sceneNodes.background = new THREE.Color( 0x383838 );
+        sceneBranches.background = new THREE.Color( 0x000000 );
     }
 
     /*
@@ -689,6 +598,27 @@ var TrueCount = ( function () {
             // helps insert objects that lie over more than one node
             overlapPct: 0.15
         } );
+    }
+
+    function initRenderTargets() {
+
+        var renderTargetParameters = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat, stencilBuffer: false, generateMipmaps: false };
+
+        renderTargetBranches = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, renderTargetParameters );
+        renderTargetNodes = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, renderTargetParameters );
+
+        composer = new THREE.EffectComposer( renderer );
+
+       /* var r = new THREE.RenderPass( sceneNodes, camera );
+        r.renderToScreen = true;
+        composer.addPass( r );*/
+
+        var p = new THREE.ShaderPass( BlendShader );
+        p.uniforms["tDiffuse1"].value = renderTargetBranches.texture;
+        p.uniforms["tDiffuse2"].value = renderTargetNodes.texture;
+        p.renderToScreen = true;
+        //p.needsSwap = true;
+        composer.addPass( p );
     }
 
     function onMouseDblClick( event ) {
@@ -763,13 +693,18 @@ var TrueCount = ( function () {
         initStats();
         initControls();
         initOctree();
+        initRenderTargets();
     }
 
     function draw() {
 
         update();
         requestAnimationFrame( draw );
-        renderer.render( scene, camera );
+
+        renderer.render( sceneNodes, camera, renderTargetNodes );
+        renderer.render( sceneBranches, camera, renderTargetBranches );
+
+        composer.render();
     }
 
     const NodeShader = {
@@ -814,6 +749,50 @@ var TrueCount = ( function () {
             "void main() {",
 
             "gl_FragColor = vec4( color * opacity, opacity ) * brightness;",
+            "}"
+
+        ].join( "\n" )
+
+    };
+
+    const BlendShader = {
+
+        uniforms: {
+
+            "tDiffuse1": { value: null },
+            "tDiffuse2": { value: null }
+
+        },
+
+        vertexShader: [
+
+            "varying vec2 vUv;",
+
+            "void main() {",
+
+            "vUv = uv;",
+            "gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
+
+            "}"
+
+        ].join( "\n" ),
+
+        fragmentShader: [
+
+            //"uniform float opacity;",
+            //"uniform float mixRatio;",
+
+            "uniform sampler2D tDiffuse1;",
+            "uniform sampler2D tDiffuse2;",
+
+            "varying vec2 vUv;",
+
+            "void main() {",
+
+            "vec4 texel1 = texture2D( tDiffuse1, vUv );",
+            "vec4 texel2 = texture2D( tDiffuse2, vUv );",
+            "gl_FragColor = max( texel1, texel2 );",
+
             "}"
 
         ].join( "\n" )
@@ -910,7 +889,7 @@ var TrueCount = ( function () {
 
         drawNodes: function() {
 
-            scene.remove( NodesMesh );
+            sceneNodes.remove( NodesMesh );
 
             setNodesPosition( Nodes );
 
@@ -919,7 +898,7 @@ var TrueCount = ( function () {
 
         drawLinks: function() {
 
-            scene.remove( BranchesMesh );
+            sceneBranches.remove( BranchesMesh );
             BranchesMesh = addLinks( Nodes, Materials.branch );
         }
     }
