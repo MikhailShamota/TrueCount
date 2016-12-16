@@ -27,9 +27,9 @@ var TrueCount = ( function () {
     var NodesAttractionIterations = 1;//200
 
     var stats, controls;
-    var camera, sceneNodes, sceneBranches, renderer, composer;
+    var camera, renderer, scene;
     var octree;
-    var renderTargetBranches, renderTargetNodes;
+    //var renderTargetBranches, renderTargetNodes, sceneNodes, sceneBranches, composer;
 
     var BranchesMesh;
     var BranchesMeshShowed;
@@ -208,7 +208,10 @@ var TrueCount = ( function () {
 
         var particles = new THREE.Points( geometry, material );
 
-        sceneNodes.add( particles );
+        //sceneNodes.add( particles );
+        scene.add( particles );
+
+        //sceneNodes.add( new THREE.Sprite( ) );//TODO: без этого вызова не корректно отображаются ветви...(
 
         return particles;
     }
@@ -285,7 +288,8 @@ var TrueCount = ( function () {
 
         var sprite = label( node2hint( node ), node.size * 2 /*R x 2*/ );
         sprite.position.set( node.position.x, node.position.y, node.position.z );
-        sceneNodes.add( sprite );
+        //sceneNodes.add( sprite );
+        scene.add( sprite );
         node.label = true;
     }
 
@@ -461,7 +465,8 @@ var TrueCount = ( function () {
             });
         } );
 
-        sceneBranches.add( mesh );
+        //sceneBranches.add( mesh );
+        scene.add( mesh );
 
         return mesh;
     }
@@ -490,8 +495,10 @@ var TrueCount = ( function () {
 
         getLinkedNodes( nodeFrom, pathOfNodes );
 
-        sceneBranches.remove( BranchesMeshShowed );
-        sceneNodes.remove( NodesMeshShowed );
+        //sceneBranches.remove( BranchesMeshShowed );
+        //sceneNodes.remove( NodesMeshShowed );
+        scene.remove( BranchesMeshShowed );
+        scene.remove( NodesMeshShowed );
 
         //draw links
         BranchesMeshShowed = addLinks( pathOfNodes, Materials.branchShow );
@@ -515,9 +522,9 @@ var TrueCount = ( function () {
 
     function initGL() {
 
-        //scene = new THREE.Scene();
-        sceneNodes = new THREE.Scene();
-        sceneBranches = new THREE.Scene();
+        scene = new THREE.Scene();
+        //sceneNodes = new THREE.Scene();
+        //sceneBranches = new THREE.Scene();
 
         var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
@@ -542,10 +549,9 @@ var TrueCount = ( function () {
 
         document.body.appendChild( renderer.domElement );
 
-        /*sceneNodes.background = new THREE.Color( 0x383838 );
-        sceneBranches.background = new THREE.Color( 0x383838 );*/
-        sceneNodes.background = new THREE.Color( 0x383838 );
-        sceneBranches.background = new THREE.Color( 0x000000 );
+        scene.background = new THREE.Color( 0x383838 );
+        //sceneNodes.background = new THREE.Color( 0x383838 );
+        //sceneBranches.background = new THREE.Color( 0x000000 );
     }
 
     /*
@@ -600,6 +606,7 @@ var TrueCount = ( function () {
         } );
     }
 
+    /*
     function initRenderTargets() {
 
         var renderTargetParameters = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat, stencilBuffer: false, generateMipmaps: false };
@@ -609,9 +616,9 @@ var TrueCount = ( function () {
 
         composer = new THREE.EffectComposer( renderer );
 
-       /* var r = new THREE.RenderPass( sceneNodes, camera );
-        r.renderToScreen = true;
-        composer.addPass( r );*/
+        //var r = new THREE.RenderPass( sceneNodes, camera );
+        //r.renderToScreen = true;
+        //composer.addPass( r );
 
         var p = new THREE.ShaderPass( BlendShader );
         p.uniforms["tDiffuse1"].value = renderTargetBranches.texture;
@@ -620,7 +627,7 @@ var TrueCount = ( function () {
         //p.needsSwap = true;
         composer.addPass( p );
     }
-
+*/
     function onMouseDblClick( event ) {
 
         showLinked();//hide highlighted elements
@@ -693,7 +700,7 @@ var TrueCount = ( function () {
         initStats();
         initControls();
         initOctree();
-        initRenderTargets();
+        //initRenderTargets();
     }
 
     function draw() {
@@ -701,10 +708,11 @@ var TrueCount = ( function () {
         update();
         requestAnimationFrame( draw );
 
-        renderer.render( sceneNodes, camera, renderTargetNodes );
+        /*renderer.render( sceneNodes, camera, renderTargetNodes );
         renderer.render( sceneBranches, camera, renderTargetBranches );
 
-        composer.render();
+        composer.render();*/
+        renderer.render( scene, camera );
     }
 
     const NodeShader = {
@@ -754,7 +762,7 @@ var TrueCount = ( function () {
         ].join( "\n" )
 
     };
-
+/*
     const BlendShader = {
 
         uniforms: {
@@ -791,14 +799,14 @@ var TrueCount = ( function () {
 
             "vec4 texel1 = texture2D( tDiffuse1, vUv );",
             "vec4 texel2 = texture2D( tDiffuse2, vUv );",
-            "gl_FragColor = max( texel1, texel2 );",
+            "gl_FragColor = max( texel2, texel1 );",
 
             "}"
 
         ].join( "\n" )
 
     };
-
+*/
     function initMaterials() {
 
         var canvasSize = new THREE.Vector2( renderer.context.canvas.width, renderer.context.canvas.height );
@@ -889,7 +897,8 @@ var TrueCount = ( function () {
 
         drawNodes: function() {
 
-            sceneNodes.remove( NodesMesh );
+            //sceneNodes.remove( NodesMesh );
+            scene.remove( NodesMesh );
 
             setNodesPosition( Nodes );
 
@@ -898,7 +907,9 @@ var TrueCount = ( function () {
 
         drawLinks: function() {
 
-            sceneBranches.remove( BranchesMesh );
+            //sceneBranches.remove( BranchesMesh );
+            scene.remove( BranchesMesh );
+
             BranchesMesh = addLinks( Nodes, Materials.branch );
         }
     }
