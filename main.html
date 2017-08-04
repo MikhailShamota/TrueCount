@@ -18,11 +18,38 @@
 </div>
 
 <script type="text/javascript" src="my_js/TrueCount.js"></script>
-<script type="text/javascript" src="my_js/elasticdata.js"></script>
-<script type="text/javascript" src="my_js/draw.js"></script>
+<!--<script type="text/javascript" src="my_js/elasticdata.js"></script>-->
+<script type="text/javascript" src="my_js/filedata.js"></script>
 
 <!--TEST DATA-->
-<script type="text/javascript" src="private_load.js"></script>
+<div style="position: absolute; top: 50vh; left: 50vw;">
+    <input type="file" id="files" name="files[]" multiple />
+</div>
+<script>
+
+    document.getElementById('files').addEventListener('change', handleFileSelect, false);
+
+    function handleFileSelect( event ) {
+
+        var files = event.target.files;
+
+        for ( var i = 0; i < files.length; i++ ) {
+
+            parseFile( files[ i ], function( str ) {
+
+                console.log( str );
+                console.log( '============CHUNK==============');
+            } );
+        }
+    }
+
+    TrueCount.init();
+    TrueCount.draw();
+</script>
+
+
+
+
 
 </body>
 </html>
