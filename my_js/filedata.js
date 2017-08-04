@@ -13,7 +13,7 @@ function parseFile( file, callback ) {
         if ( evt.target.error == null ) {
 
             var s = event.target.result;
-            var lineEnd = s.lastIndexOf("\n");
+            var lineEnd = s.lastIndexOf( "\n" );
             lineEnd > 0 ? s = s.slice( 0, lineEnd ) : s;
 
             offset += s.length;

@@ -39,8 +39,35 @@
 
                 console.log( str );
                 console.log( '============CHUNK==============');
+
+                str.split( '\n').map( function( line ) {
+
+                    parseLine( line );
+                });
             } );
         }
+    }
+
+    function parseLine( str ) {
+
+        try {
+
+            var rec = JSON.parse( str );
+            TrueCount.loadNode( rec );
+        } catch (e) {
+
+        }
+
+
+            /*    var branch = {
+
+                    src: node.id,
+                    dst: v.id,
+                    doc: null,
+                    weight: 1
+                }
+
+                TrueCount.loadBranch( branch );*/
     }
 
     TrueCount.init();
