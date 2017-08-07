@@ -20,8 +20,8 @@ var TrueCount = ( function () {
     const worldSize = 1000;
     const defaultDensity = 0.15;
 
-    const SceneElementOpacity = 0.35;
-    const SceneElementFadeOpacity = 0.075;
+    const SceneElementOpacity = 0.95;
+    const SceneElementFadeOpacity = 0.475;
 
     var BranchesLineStyle = STYLELINE.CURVE;
     var NodesAttractionIterations = 1;//200
