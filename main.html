@@ -50,14 +50,20 @@
         var files = event.target.files;
         var loadedCount = 0;
 
+
         for ( var i = 0; i < files.length; i++ ) {
+
+            var loadedSize = 0;
+            var fileName = files[ i].name;
 
             parseFile(
                     files[ i ],
-                    function( str ) {
+                    function( str, loaded, fileSize ) {
 
-                    console.log( str );
-                    console.log( '============CHUNK==============');
+                    //console.log( str );
+                    //console.log( '============CHUNK==============');
+                    loadedSize += loaded;
+                    console.log( fileName + " " + loadedSize +" bytes loaded of " + fileSize);
 
                     str.split('\n').map( function( line ) {
 
@@ -79,7 +85,7 @@
 
     function parseLine( str ) {
 
-        var nodeParent = { id: "--", parent: null, weight: 1000, doc: null };
+        var nodeParent = { id: "--", parent: null, weight: 20000, doc: null };
         TrueCount.loadNode( nodeParent );
 
         try {
@@ -102,11 +108,19 @@
                             doc: doc,
                             weight: weight
                         });
+  /*                      TrueCount.loadBranch({
+                            src: nodeIddst,
+                            dst: nodeIdsrc,
+                            doc: doc,
+                            weight: weight
+                        });*/
+
 
                         var nodeSrc = { id: nodeIdsrc, parent: "--", weight: 1, doc: null };
                         var nodeDst = { id: nodeIddst, parent: "--", weight: 1, doc: null };
                         TrueCount.loadNode( nodeSrc );
                         TrueCount.loadNode( nodeDst );
+
                     }
 
             } else {

@@ -1,7 +1,7 @@
 function parseFile( file, callbackRead, callbackDone ) {
 
     const encode = 'UTF-8';
-    const bufferSize = 30* 1024;
+    const bufferSize = 1024 * 1024;
 
     var fileSize   = file.size;
     var chunkSize  = Math.min( bufferSize, fileSize); // bytes
@@ -29,7 +29,7 @@ function parseFile( file, callbackRead, callbackDone ) {
                 }
             }
 
-            callbackRead( s ); // callback for handling read chunk
+            callbackRead( s, evt.loaded, fileSize ); // callback for handling read chunk
         } else {
 
             console.log( "Read error: " + evt.target.error );
@@ -37,8 +37,10 @@ function parseFile( file, callbackRead, callbackDone ) {
         }
         if ( offset >= fileSize ) {
 
-            callbackDone();
             console.log( "Done reading file" );
+
+            callbackDone();
+
             return;
         }
 

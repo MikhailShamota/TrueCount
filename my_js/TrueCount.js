@@ -21,9 +21,10 @@ var TrueCount = ( function () {
     const defaultDensity = 0.15;
 
     const SceneElementOpacity = 0.35;
-    const SceneElementFadeOpacity = 0.075;
+    const SceneElementFadeOpacity = 0.475;
 
     var BranchesLineStyle = STYLELINE.CURVE;
+    //var BranchesLineStyle = STYLELINE.STRAIGHT;
     var NodesAttractionIterations = 1;//200
 
     var stats, controls;
@@ -414,24 +415,32 @@ var TrueCount = ( function () {
 
     function loadBranch( branch ) {
 
-        var src = branch.src;
-        var dst = branch.dst;
-        var doc = branch.document;
-        var weight = branch.weight;
+        //branch.src;
+        //branch.dst;
+        //branch.doc;
+        //branch.weight;
 
-        if ( !Branches[src] )
-            Branches[src] = [];
+        function load( b ) {
 
-        Branches[src].push ({
+            if ( !Branches[b.src] )
+                Branches[b.src] = [];
 
-            src: src,
-            dst: dst,
-            doc: doc,
-            weight: weight
-        });
+            if ( Branches[b.src][b.dst] ) {
 
-        var nodeSrc = Nodes[src] || new Node( src );
-        var nodeDst = Nodes[dst] || new Node( dst );
+                Branches[b.src][b.dst].weight += b.weight;
+                Branches[b.src][b.dst].count++;
+            } else {
+
+                Branches[b.src][b.dst] = b;
+                Branches[b.src][b.dst].count = 1;
+            }
+        }
+
+        load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
+        load( { src:branch.dst, dst:branch.src, doc:branch.doc, weight:branch.weight } );
+
+        var nodeSrc = Nodes[branch.src] || new Node( branch.src );
+        var nodeDst = Nodes[branch.dst] || new Node( branch.dst );
 
         nodeSrc.out++;
         nodeDst.in++;
@@ -445,8 +454,9 @@ var TrueCount = ( function () {
 
             var branches = val.branches();
 
-            branches && $.each( branches, function ( k, v ) {
+            for ( var dstId in branches ) {
 
+                var v = branches[dstId];
                 var srcNode = Nodes[v.src];
                 var dstNode = Nodes[v.dst];
 
@@ -462,7 +472,7 @@ var TrueCount = ( function () {
                     v.meshIndex = mesh.children.length - 1;
 
                 //i++;
-            });
+           }
         } );
 
         //sceneBranches.add( mesh );
@@ -483,10 +493,10 @@ var TrueCount = ( function () {
         if ( !Branches[nodeFrom.id] )
             return;//если нет дальнейших шагов
 
-        $.each( Branches[nodeFrom.id], function( k, v ) {
+        for ( var dstId in Branches[nodeFrom.id] ) {
 
-            getLinkedNodes( Nodes[v.dst], pathOfNodes );
-        } );
+            getLinkedNodes( Nodes[dstId], pathOfNodes );
+        }
     }
 
     function showLinked( nodeFrom ) {
@@ -838,7 +848,7 @@ var TrueCount = ( function () {
             near: camera.near,
             far: camera.far,
             depthWrite: false,
-            blending: THREE.AdditiveBlending,
+            blending: THREE.AdditiveBlending
         } );
 
         var branchShowMaterial = branchMaterial.clone();
