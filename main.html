@@ -50,11 +50,15 @@
         var files = event.target.files;
         var loadedCount = 0;
 
+        var nodeParent = { id: "--", parent: null, weight: 20000, doc: null };
+        TrueCount.loadNode( nodeParent );
 
         for ( var i = 0; i < files.length; i++ ) {
 
             var loadedSize = 0;
             var fileName = files[ i].name;
+
+
 
             parseFile(
                     files[ i ],
@@ -85,9 +89,6 @@
 
     function parseLine( str ) {
 
-        var nodeParent = { id: "--", parent: null, weight: 20000, doc: null };
-        TrueCount.loadNode( nodeParent );
-
         try {
 
             var rec = JSON.parse( str );
@@ -99,7 +100,7 @@
 
                         var nodeIdsrc = rec.Items[i].ItemId;
                         var nodeIddst = rec.Items[j].ItemId;
-                        var weight = 100;
+                        var weight = 1;
                         var doc = rec.id;
 
                         TrueCount.loadBranch({
@@ -108,13 +109,6 @@
                             doc: doc,
                             weight: weight
                         });
-  /*                      TrueCount.loadBranch({
-                            src: nodeIddst,
-                            dst: nodeIdsrc,
-                            doc: doc,
-                            weight: weight
-                        });*/
-
 
                         var nodeSrc = { id: nodeIdsrc, parent: "--", weight: 1, doc: null };
                         var nodeDst = { id: nodeIddst, parent: "--", weight: 1, doc: null };

@@ -76,7 +76,7 @@ var TrueCount = ( function () {
                 );
 
                 return v3UnitX.clone().applyEuler( a );
-            };
+            }
 
             const kCoulomb = 0.1;
             const kHooke = 0.5;
@@ -363,8 +363,11 @@ var TrueCount = ( function () {
         var v1 = from.position;
         var v2 = to.position;
 
-        var s1 = from.size;
-        var s2 = to.size;
+        var s_middle = 200 * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
+        var s1 = Math.min( from.size, s_middle );
+        var s2 = Math.min( to.size, s_middle );
+        //var s1 = material.lineWidth * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
+        //var s2 = s1;
 
         var v3 = v3Zero.clone();
         /*var from_to = v2.clone().sub( v1 );
@@ -407,7 +410,7 @@ var TrueCount = ( function () {
         line.setGeometry( 
 
             geometry,
-            function( p ) { return s2 * p + s1 * ( 1 - p ) }//size changes linear from start to end
+            function( p ) { return s2 * p + s1 * ( 1 - p ) + s_middle * ( 1 - Math.abs( (p - 0.5) / 0.5 ) ) }//size changes linear from start to end
         );
 
         return new THREE.Mesh( line.geometry, material );
@@ -434,6 +437,11 @@ var TrueCount = ( function () {
                 Branches[b.src][b.dst] = b;
                 Branches[b.src][b.dst].count = 1;
             }
+
+            Branches.maxWeight = Math.max( Branches[b.src][b.dst].weight, Branches.maxWeight || Number.MIN_SAFE_INTEGER );
+            Branches.minWeight = Math.min( Branches[b.src][b.dst].weight, Branches.minWeight || Number.MAX_SAFE_INTEGER );
+            Branches.maxCount = Math.max( Branches[b.src][b.dst].count, Branches.maxCount || Number.MIN_SAFE_INTEGER );
+            Branches.minCount = Math.min( Branches[b.src][b.dst].count, Branches.minCount || Number.MAX_SAFE_INTEGER );
         }
 
         load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
@@ -505,8 +513,6 @@ var TrueCount = ( function () {
 
         getLinkedNodes( nodeFrom, pathOfNodes );
 
-        //sceneBranches.remove( BranchesMeshShowed );
-        //sceneNodes.remove( NodesMeshShowed );
         scene.remove( BranchesMeshShowed );
         scene.remove( NodesMeshShowed );
 
@@ -533,8 +539,6 @@ var TrueCount = ( function () {
     function initGL() {
 
         scene = new THREE.Scene();
-        //sceneNodes = new THREE.Scene();
-        //sceneBranches = new THREE.Scene();
 
         var WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
 
@@ -687,22 +691,11 @@ var TrueCount = ( function () {
                 if ( !node.visible )
                     return;
 
-                /*
-                var objs = octree.search(node.position, 100, false);
-                $.each(objs, function(k,v) {
-
-                     Nodes[v.object] ;
-                });
-                */
-
                 console.log( node );
 
-                showLinked( node );
+                //showLinked( node );
             }
         } );
-
-        /*if ( found == 0 )
-            showLinked();*/
     }
 
     function init() {
@@ -844,7 +837,7 @@ var TrueCount = ( function () {
             opacity: SceneElementOpacity,
             resolution: canvasSize,
             sizeAttenuation: true,
-            lineWidth: 0.38,//see size changes function
+            //lineWidth: worldSize * 0.2,//see size changes function
             near: camera.near,
             far: camera.far,
             depthWrite: false,
