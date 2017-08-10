@@ -20,8 +20,8 @@ var TrueCount = ( function () {
     const worldSize = 1000;
     const defaultDensity = 0.15;
 
-    const SceneElementOpacity = 0.95;
-    const SceneElementFadeOpacity = 0.475;
+    const SceneElementOpacity = 0.35;
+    const SceneElementFadeOpacity = 0.075;
 
     var BranchesLineStyle = STYLELINE.CURVE;
     var NodesAttractionIterations = 1;//200
@@ -543,13 +543,14 @@ var TrueCount = ( function () {
 
         renderer = new THREE.WebGLRenderer( {antialias:true} );
         renderer.setSize( WIDTH, HEIGHT );
+        renderer.setPixelRatio( window.devicePixelRatio );
         renderer.sortObjects = false;
         renderer.domElement.addEventListener( "click", onMouseClick );
         renderer.domElement.addEventListener( "dblclick", onMouseDblClick );
 
         document.body.appendChild( renderer.domElement );
 
-        scene.background = new THREE.Color( 0x383838 );
+        scene.background = new THREE.Color( 0x181818 );
         //sceneNodes.background = new THREE.Color( 0x383838 );
         //sceneBranches.background = new THREE.Color( 0x000000 );
     }
@@ -895,10 +896,10 @@ var TrueCount = ( function () {
             loadBranch( branch )//-->Branches
         },
 
-        drawNodes: function() {
+        drawNodes: function( addMode ) {
 
             //sceneNodes.remove( NodesMesh );
-            scene.remove( NodesMesh );
+            !addMode && scene.remove( NodesMesh );
 
             setNodesPosition( Nodes );
 
