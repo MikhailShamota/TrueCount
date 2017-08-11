@@ -10,7 +10,7 @@ var TrueCount = ( function () {
         NONE: 0,
         STRAIGHT: 1,
         CURVE: 2
-    }
+    };
 
     const v3Zero  = new THREE.Vector3( 0, 0, 0 );
     const v3UnitX = new THREE.Vector3( 1, 0, 0 );
@@ -23,7 +23,9 @@ var TrueCount = ( function () {
     const SceneElementOpacity = 0.35;
     const SceneElementFadeOpacity = 0.475;
 
-    var BranchesLineStyle = STYLELINE.CURVE;
+    const BranchesLineStyle = STYLELINE.CURVE;
+    const BRANCH_WIDTH_MAX = 200;
+
     //var BranchesLineStyle = STYLELINE.STRAIGHT;
     var NodesAttractionIterations = 1;//200
 
@@ -294,12 +296,13 @@ var TrueCount = ( function () {
         node.label = true;
     }
 
+    //if node exists its data will be overritten!
     function loadNode( node ) {
 
         var id = node.id;
-        var weight = node.weight;
-        var parentId = node.parent || '';
-        var doc = node.document;
+        var parentId = node.parent || Nodes[id] && Nodes[id].parent || '';
+        var weight = node.weight || Nodes[id] && Nodes[id].weight;
+        var doc = node.document || Nodes[id] && Nodes[id].document;
 
         /*if ( Nodes[id] )
             return;*/
@@ -335,6 +338,8 @@ var TrueCount = ( function () {
         }
 
         Nodes[id] = obj;
+
+        return obj;
     }
 
     /*
@@ -363,9 +368,9 @@ var TrueCount = ( function () {
         var v1 = from.position;
         var v2 = to.position;
 
-        var s_middle = 200 * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
-        var s1 = Math.min( from.size, s_middle );
-        var s2 = Math.min( to.size, s_middle );
+        var s2 = BRANCH_WIDTH_MAX * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
+        var s1 = Math.min( from.size, s2 );
+        var s3 = Math.min( to.size, s2 );
         //var s1 = material.lineWidth * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
         //var s2 = s1;
 
@@ -410,7 +415,7 @@ var TrueCount = ( function () {
         line.setGeometry( 
 
             geometry,
-            function( p ) { return s2 * p + s1 * ( 1 - p ) + s_middle * ( 1 - Math.abs( (p - 0.5) / 0.5 ) ) }//size changes linear from start to end
+            function( p ) { return s3 * p + s1 * ( 1 - p ) + s2 * ( 1 - Math.abs( (p - 0.5) / 0.5 ) ) }//size changes linear from start to end
         );
 
         return new THREE.Mesh( line.geometry, material );
@@ -447,11 +452,13 @@ var TrueCount = ( function () {
         load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
         load( { src:branch.dst, dst:branch.src, doc:branch.doc, weight:branch.weight } );
 
-        var nodeSrc = Nodes[branch.src] || new Node( branch.src );
-        var nodeDst = Nodes[branch.dst] || new Node( branch.dst );
+        loadNode( { id: branch.src } ).out++;
+        loadNode( { id: branch.dst } ).in++;
+        /*var nodeSrc = Nodes[branch.src] || new Node( branch.src );
+        var nodeDst = Nodes[branch.dst] || new Node( branch.dst );*/
 
-        nodeSrc.out++;
-        nodeDst.in++;
+        //nodeSrc.out++;
+        //nodeDst.in++;
     }
 
     function addLinks( nodes, material ) {
