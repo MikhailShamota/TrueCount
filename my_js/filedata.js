@@ -29,7 +29,7 @@ function parseFile( file, callbackRead, callbackDone ) {
                 }
             }
 
-            callbackRead( s, evt.loaded, fileSize ); // callback for handling read chunk
+            callbackRead( s, evt.loaded, offset, fileSize ); // callback for handling read chunk
         } else {
 
             console.log( "Read error: " + evt.target.error );

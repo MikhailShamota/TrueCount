@@ -26,6 +26,8 @@ var TrueCount = ( function () {
     const BranchesLineStyle = STYLELINE.CURVE;
     const BRANCH_WIDTH_MAX = 200;
     const LABEL_SIZE = 400;
+    const NODE_MAX_BRIGHTNESS = 10;
+    const NODE_MIN_BRIGHTNESS = 1;
 
     //var BranchesLineStyle = STYLELINE.STRAIGHT;
     var NodesAttractionIterations = 1;//200
@@ -44,6 +46,14 @@ var TrueCount = ( function () {
 
     var Nodes = {};
     var Branches = {};
+    Branches.xWeight  = function( p ) {
+
+        return ( p - this.minWeight ) / ( this.maxWeight - this.minWeight );
+    };
+    Branches.xCount  = function( p ) {
+
+        return ( p - this.minCount ) / ( this.maxCount - this.minCount );
+    };
 
     function Node( id ) {
 
@@ -195,7 +205,7 @@ var TrueCount = ( function () {
 
             node.position.toArray( positions, i * 3 );
             sizes[i] = node.visible && node.size || 0;
-            brightness[i] = node.out + node.in + 1;//+1 let it be - nonbranched node!
+            brightness[i] = Branches.xCount( node.out + node.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;//+1 let it be - nonbranched node!
 
             //TODO:
             //octree.addObjectData( node.id, node );//<--overrided
@@ -473,6 +483,11 @@ var TrueCount = ( function () {
             for ( var dstId in branches ) {
 
                 var v = branches[dstId];
+
+                сделать тут расчет относительно сколько всего ветвей и понижать или повышать планку прохода
+                if ( Branches.xWeight( v.weight ) < 0.005 )
+                    return;
+
                 var srcNode = Nodes[v.src];
                 var dstNode = Nodes[v.dst];
 
@@ -498,7 +513,7 @@ var TrueCount = ( function () {
     }
 
 
-    //recursive
+    /**recursive*/
     function getLinkedNodes( nodeFrom, pathOfNodes ) {
 
         if ( !nodeFrom || pathOfNodes[nodeFrom.id] )
@@ -653,7 +668,7 @@ var TrueCount = ( function () {
 */
     function onMouseDblClick( event ) {
 
-        //showLinked();//hide highlighted elements
+        showLinked();//hide highlighted elements
     }
 
     function onMouseClick( event ) {
@@ -707,7 +722,7 @@ var TrueCount = ( function () {
         } );
 
         selectedNode && ( console.log( selectedNode ) || addLabel ( selectedNode ) );
-
+        //showLinked( selectedNode );
     }
 
     function init() {
