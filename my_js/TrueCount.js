@@ -25,6 +25,7 @@ var TrueCount = ( function () {
 
     const BranchesLineStyle = STYLELINE.CURVE;
     const BRANCH_WIDTH_MAX = 200;
+    const LABEL_SIZE = 400;
 
     //var BranchesLineStyle = STYLELINE.STRAIGHT;
     var NodesAttractionIterations = 1;//200
@@ -190,6 +191,8 @@ var TrueCount = ( function () {
 
         $.each( nodes, function ( id, node ) {
 
+            //( node.in + node.out > Branches.maxCount * 0.2 ) && addLabel( node );
+
             node.position.toArray( positions, i * 3 );
             sizes[i] = node.visible && node.size || 0;
             brightness[i] = node.out + node.in + 1;//+1 let it be - nonbranched node!
@@ -222,11 +225,6 @@ var TrueCount = ( function () {
     function weight2size( weight ) {
 
         return weight && Math.pow( weight, 1/3 ) || 1;// * defaultDocumentSize / defaultDocumentDensity;
-    }
-
-    function node2hint( node ) {
-
-        return node.id;// + ":" + node.weight;
     }
 
     function label( txt, billboardSize ) {
@@ -264,7 +262,7 @@ var TrueCount = ( function () {
         context.fillStyle = 'white';
         context.fillRect( 0, 0, canvas.width, canvas.height );*/
 
-        context.fillStyle = 'black';
+        context.fillStyle = 'White';
         context.textAlign = "center";
         context.textBaseline = "middle";
 
@@ -289,20 +287,22 @@ var TrueCount = ( function () {
         if ( node.label )
             return;
 
-        var sprite = label( node2hint( node ), node.size * 2 /*R x 2*/ );
-        sprite.position.set( node.position.x, node.position.y, node.position.z );
+        var sprite = label( node.alias || node.id, /*node.size * 2*/ LABEL_SIZE /*R x 2*/ );
+        sprite.position.set( node.position.x, node.position.y, node.position.z).multiplyScalar( 1.2 );
+        sprite.frustumCulled = false;
         //sceneNodes.add( sprite );
         scene.add( sprite );
         node.label = true;
     }
 
-    //if node exists its data will be overritten!
+    /**if node exists its data will be overritten!*/
     function loadNode( node ) {
 
         var id = node.id;
         var parentId = node.parent || Nodes[id] && Nodes[id].parent || '';
         var weight = node.weight || Nodes[id] && Nodes[id].weight;
         var doc = node.document || Nodes[id] && Nodes[id].document;
+        var alias = node.alias || Nodes[id] && Nodes[id].alias;
 
         /*if ( Nodes[id] )
             return;*/
@@ -330,6 +330,7 @@ var TrueCount = ( function () {
         obj.weight = weight;
         obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
         obj.document = doc;
+        obj.alias = alias;
 
         if ( parent ) {
 
@@ -652,7 +653,7 @@ var TrueCount = ( function () {
 */
     function onMouseDblClick( event ) {
 
-        showLinked();//hide highlighted elements
+        //showLinked();//hide highlighted elements
     }
 
     function onMouseClick( event ) {
@@ -677,6 +678,7 @@ var TrueCount = ( function () {
             raycaster.ray.direction );
 
         var boundingSphere = new THREE.Sphere();
+        var selectedNode = null;
 
         $.each( octreeObjects, function( key, val ) {
 
@@ -688,21 +690,24 @@ var TrueCount = ( function () {
             boundingSphere.center = val.position;
             boundingSphere.radius = val.radius;
 
-            if ( raycaster.ray.intersectSphere( boundingSphere ) ) {
+            var pt = raycaster.ray.intersectSphere( boundingSphere );
+            if ( pt ) {
                 //var mesh = new THREE.Mesh( new THREE.SphereGeometry( val.radius,10,10 ),new THREE.MeshBasicMaterial( {color:0xffffffff} ) );
                 //mesh.position.set( boundingSphere.center.x,boundingSphere.center.y,boundingSphere.center.z );
                 //scene.add( mesh );
                 var id = val.object;
                 var node = Nodes[id];
+                node.dist = pt.distanceToSquared( camera.position );
 
                 if ( !node.visible )
                     return;
 
-                console.log( node );
-
-                //showLinked( node );
+                selectedNode = selectedNode && selectedNode.dist < node.dist ? selectedNode : node;
             }
         } );
+
+        selectedNode && ( console.log( selectedNode ) || addLabel ( selectedNode ) );
+
     }
 
     function init() {
