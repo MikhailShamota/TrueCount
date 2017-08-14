@@ -18,10 +18,11 @@ var TrueCount = ( function () {
     const v3UnitZ = new THREE.Vector3( 0, 0, 1 );
 
     const worldSize = 1000;
+    const mountianSize = 20;//worldSize+mountianSize
     const defaultDensity = 0.15;
 
-    const SceneElementOpacity = 0.35;
-    const SceneElementFadeOpacity = 0.475;
+    const SceneElementOpacity = 0.55;
+    const SceneElementFadeOpacity = 0.55;
 
     const BranchesLineStyle = STYLELINE.CURVE;
     const BRANCH_WIDTH_MAX = 200;
@@ -30,12 +31,10 @@ var TrueCount = ( function () {
     const NODE_MIN_BRIGHTNESS = 1;
 
     //var BranchesLineStyle = STYLELINE.STRAIGHT;
-    var NodesAttractionIterations = 1;//200
 
     var stats, controls;
     var camera, renderer, scene;
     var octree;
-    //var renderTargetBranches, renderTargetNodes, sceneNodes, sceneBranches, composer;
 
     var BranchesMesh;
     var BranchesMeshShowed;
@@ -58,134 +57,56 @@ var TrueCount = ( function () {
     function Node( id ) {
 
         this.id = id;
-
-        this.parent = null;
-        this.size = null;
-        this.weight = null;
-        this.childSize = null;
+        this.weight = 0;
         this.document = null;
-
-        //defaults
-        this.children = {};
         this.in = 0;
         this.out = 0;
         this.visible = true;
         this.label = false;
+        this.position = new THREE.Vector3();
 
         this.branches = function() {
 
             return Branches[this.id];
-        }
-
-        this.setPosition = function() {
-
-            function getRandomUnitVector() {
-
-                var a = new THREE.Euler(
-                    Math.random() * 2 * Math.PI,
-                    Math.random() * 2 * Math.PI,
-                    Math.random() * 2 * Math.PI,
-                    'XYZ'
-                );
-
-                return v3UnitX.clone().applyEuler( a );
-            }
-
-            const kCoulomb = 0.1;
-            const kHooke = 0.5;
-            const kCoulombRadius = 4;// x Size
-
-            if (!this.position) {
-
-                this.position = getRandomUnitVector().multiplyScalar(this.parent && this.parent.size || 0).add(this.parent && this.parent.position || v3Zero);
-                return;
-            }
-
-            var f = new THREE.Vector3();//sum of node forces
-            var fPull = new THREE.Vector3();
-            var fPush = new THREE.Vector3();
-
-            var p = this.position.clone();
-            var thisparentid = this.parent && this.parent.id;
-            var thisweight = this.weight;
-            var thissize = this.size;
-            /*
-             *
-             * GET TARGETS BRANCH FORCE
-             *
-             */
-            var outBranches = this.branches();
-            outBranches && $.each( outBranches, function( key, target ) {
-
-                var to = Nodes[target.dst];
-                if ( !to || !to.position )
-                    return;
-
-                if ( thisparentid != to.parent.id )//DO DISPOSITION ONLY FOR CHILDREN OF A SAME PARENT
-                    return;
-
-                var vec = to.position.clone().sub( p );//vec from this node to target
-
-                fPull.add( vec );//branch Hooke F = -k * x
-
-            });
-
-            var neighbors = octree && octree.search( p, this.size * kCoulombRadius );
-            neighbors && $.each( neighbors, function( key, neighbor ) {
-
-                var node = Nodes[neighbor.object];
-                if ( !node.visible )
-                    return;
-
-                var vec = node.position.clone().sub( p );//vec from this node to target
-                var vecLen = vec.length - thissize - node.size;
-
-                fPush.add( vec.clone().normalize().multiplyScalar(
-
-                    /*thisweight * node.weight*/1.0 /
-                    Math.max( /*lengthSq()*/vecLen*vecLen, 0.00001 )
-                ) );//node Coulomb
-
-            } );
-
-            fPull = fPull.multiplyScalar( kHooke );
-            fPush = fPush.multiplyScalar( kCoulomb );
-
-            f.add( fPull ).sub( fPush );
-
-            if ( f.lengthSq() < 0.0001 )
-                return;
-
-            this.position.lerp( p.add( f ), 0.01 );
-            /*
-            *
-            * SET POSITION ON SPHERE SURFACE
-            *
-            */
-            var gravityCenter = this.parent && this.parent.position || v3Zero;
-
-            var r = this.parent && this.parent.size || 0;//sphere radius
-            var rNorm = this.position.clone().sub( gravityCenter ).normalize();//normal
-
-            //this.position = rNorm.multiplyScalar( r ).add( gravityCenter );
         };
-    };
 
-    //function getRandPosInSphere( center, radius ) {
+        this.getBrightness = function() {
 
-        //return getRandomUnitVector().multiplyScalar( Math.random() * radius ).add( center );
-    //}
+            return Branches.xCount( this.out + this.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;
+        };
+
+        this.getSize = function() {
+
+            return this.weight && Math.pow( this.weight, 1/3 ) / defaultDensity || this.visible && 1 || 0;// * defaultDocumentSize / defaultDocumentDensity;
+        };
+
+        this.getPosition = function() {
+
+            function getRandomUnitVector( length ) {
+
+                return new THREE.Vector3( 1, 0, 0 ).clone().applyEuler(
+                    new THREE.Euler(
+                        Math.random() * 2 * Math.PI,
+                        Math.random() * 2 * Math.PI,
+                        Math.random() * 2 * Math.PI,
+                        'XYZ')
+                ).multiplyScalar( length );
+            }
+
+            return getRandomUnitVector( /*this.parent && this.parent.size || 0*/worldSize + ( Branches.maxCount > 0 ? mountianSize * 0.5 * ( this.in+this.out ) / Branches.maxCount : 0 ) );//.add(this.parent && this.parent.position || v3Zero);
+        };
+    }
 
     function setNodesPosition( nodes ) {
 
-        for (var j = 0; j < NodesAttractionIterations; j++) {
+        $.each(nodes, function (id, node) {
 
-            $.each(nodes, function (id, node) {
+            node.position.copy( node.getPosition() );
+            node.size = node.getSize();
+            node.brightness = node.getBrightness();
 
-                node.setPosition();
-                octree.addObjectData( node.id, node );//<--overrided / add and upd
-            });
-        }
+            octree.addObjectData( node.id, node );//<--overrided / add and upd
+        });
     }
 
     function addParticles( nodes, material ) {
@@ -201,14 +122,9 @@ var TrueCount = ( function () {
 
         $.each( nodes, function ( id, node ) {
 
-            //( node.in + node.out > Branches.maxCount * 0.2 ) && addLabel( node );
-
             node.position.toArray( positions, i * 3 );
-            sizes[i] = node.visible && node.size || 0;
-            brightness[i] = Branches.xCount( node.out + node.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;//+1 let it be - nonbranched node!
-
-            //TODO:
-            //octree.addObjectData( node.id, node );//<--overrided
+            sizes[ i ] = node.size;
+            brightness[ i ] = node.brightness;
 
             node.geometryIndex = i;
 
@@ -224,75 +140,49 @@ var TrueCount = ( function () {
 
         var particles = new THREE.Points( geometry, material );
 
-        //sceneNodes.add( particles );
         scene.add( particles );
-
-        //sceneNodes.add( new THREE.Sprite( ) );//TODO: без этого вызова не корректно отображаются ветви...(
 
         return particles;
     }
 
-    function weight2size( weight ) {
-
-        return weight && Math.pow( weight, 1/3 ) || 1;// * defaultDocumentSize / defaultDocumentDensity;
-    }
-
-    function label( txt, billboardSize ) {
-
-        var canvas = document.createElement( "canvas" );
-        canvas.width = canvas.height = 512;//четкость зависит от
-
-        var context = canvas.getContext( "2d" );
-
-        var fontSizes = [72, 50, 36, 28, 20, 14, 12, 10, 8, 6, 5, 4, 3, 2],
-            textDimensions,
-            i = 0;
-
-        do {
-
-            context.font = "Bold " + fontSizes[i++] + 'px Arial Narrow';
-            textDimensions = context.measureText( txt );
-        } while ( textDimensions.width >= canvas.width );
-
-
-        //context.fillStyle = "rgba( 155, 255, 155, 0.28 )";
-        //context.fillRect( 0,0,canvas.width,canvas.height );
-
-        /*
-        context.fillStyle = "rgba( 78, 240, 129, 1.0 )";
-        context.lineWidth   = 5;
-        context.strokeRect( 0,0,canvas.width,canvas.height );
-
-
-        context.fillText( txt, canvas.width / 2, canvas.height / 2 );
-        context.fillStyle = 'black';
-        context.lineWidth   = 1;
-        context.strokeText( txt, canvas.width / 2, canvas.height / 2 );
-
-        context.fillStyle = 'white';
-        context.fillRect( 0, 0, canvas.width, canvas.height );*/
-
-        context.fillStyle = 'White';
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-
-        //txt = txt.split( '' ).sort( function(){return 0.5-Math.random()} ).join( '' );
-
-        context.fillText( txt, canvas.width / 2, canvas.height / 2 );
-
-        var texture = new THREE.Texture( canvas );
-        texture.needsUpdate = true;
-
-        var material = Materials.label.clone();
-        material.map = texture;
-
-        var sprite = new THREE.Sprite( material );
-        sprite.scale.set( billboardSize, billboardSize, 1 );
-
-        return sprite;
-    }
-
     function addLabel( node ) {
+
+        function label( txt, billboardSize ) {
+
+            var canvas = document.createElement( "canvas" );
+            canvas.width = canvas.height = 512;//четкость зависит от
+
+            var context = canvas.getContext( "2d" );
+
+            var fontSizes = [72, 50, 36, 28, 20, 14, 12, 10, 8, 6, 5, 4, 3, 2],
+                textDimensions,
+                i = 0;
+
+            do {
+
+                context.font = "Bold " + fontSizes[i++] + 'px Arial Narrow';
+                textDimensions = context.measureText( txt );
+            } while ( textDimensions.width >= canvas.width );
+
+            context.fillStyle = 'White';
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+
+            //txt = txt.split( '' ).sort( function(){return 0.5-Math.random()} ).join( '' );
+
+            context.fillText( txt, canvas.width / 2, canvas.height / 2 );
+
+            var texture = new THREE.Texture( canvas );
+            texture.needsUpdate = true;
+
+            var material = Materials.label.clone();
+            material.map = texture;
+
+            var sprite = new THREE.Sprite( material );
+            sprite.scale.set( billboardSize, billboardSize, 1 );
+
+            return sprite;
+        }
 
         if ( node.label )
             return;
@@ -309,24 +199,23 @@ var TrueCount = ( function () {
     function loadNode( node ) {
 
         var id = node.id;
-        var parentId = node.parent || Nodes[id] && Nodes[id].parent || '';
-        var weight = node.weight || Nodes[id] && Nodes[id].weight;
+        //var parentId = node.parent || Nodes[id] && Nodes[id].parent || '';
+        var weight = node.weight || Nodes[id] && Nodes[id].weight || 0;
         var doc = node.document || Nodes[id] && Nodes[id].document;
         var alias = node.alias || Nodes[id] && Nodes[id].alias;
 
         /*if ( Nodes[id] )
             return;*/
 
-        var parent = Nodes[parentId];
+        //var parent = Nodes[parentId];
 
-        var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
-        var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
-        //var sizeWeighted = weight && weight2size( weight.length || weight ) || 1;//размер на основании веса объекта
+        //var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
+        //var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
 
-        if ( parent && !parent.sizeScale )
-            parent.sizeScale = size / sizeWeighted;//первое значение в выборке самое большое. масштаб всех элементов группировки
+        //if ( parent && !parent.sizeScale )
+          //  parent.sizeScale = size / sizeWeighted;//первое значение в выборке самое большое. масштаб всех элементов группировки
 
-        size = sizeWeighted * ( parent && parent.sizeScale || size / sizeWeighted );//итоговый размер - размер нормализованный по самому больщому элементу ( i=0 )
+        //size = sizeWeighted * ( parent && parent.sizeScale || size / sizeWeighted );//итоговый размер - размер нормализованный по самому больщому элементу ( i=0 )
 
         /*
          *
@@ -335,36 +224,24 @@ var TrueCount = ( function () {
          */
         var obj = Nodes[id] || new Node( id );
 
-        obj.parent = parent;
-        obj.size = size;
+        //obj.parent = parent;
         obj.weight = weight;
-        obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
+        //obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
         obj.document = doc;
         obj.alias = alias;
 
+        /*
         if ( parent ) {
 
             parent.visible = false;
             parent.children[obj.id] = obj;
         }
+        */
 
         Nodes[id] = obj;
 
         return obj;
     }
-
-    /*
-    function hideElement( obj ) {
-
-        if ( !obj || !obj.visible )
-            return;
-
-        var geometry = scene.children[obj.sceneIndex].geometry;
-        var attribute = geometry.attributes["customSize"];
-        attribute.array[obj.index] = 0;
-        attribute.needsUpdate = true;
-    }
-    */
 
     function fade( value ) {
 
@@ -372,64 +249,6 @@ var TrueCount = ( function () {
 
         Materials.branch.uniforms.opacity.value = opacity;
         Materials.node.uniforms.opacity.value = opacity;
-    }
-
-    function link( from, to, material ) {
-
-        var v1 = from.position;
-        var v2 = to.position;
-
-        var s2 = BRANCH_WIDTH_MAX * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
-        var s1 = Math.min( from.size, s2 );
-        var s3 = Math.min( to.size, s2 );
-        //var s1 = material.lineWidth * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
-        //var s2 = s1;
-
-        var v3 = v3Zero.clone();
-        /*var from_to = v2.clone().sub( v1 );
-         var middle_from_to = from_to.clone().multiplyScalar( 0.5 ).add( v1 );//срединная точка между центрами гравитации
-         v3 = v3.clone().sub( middle_from_to ).normalize().multiplyScalar( from_to.length() * 0.8 ).add( middle_from_to );//вектор из срединной точки к центру
-         */
-
-        if (from.parent.id == to.parent.id)
-
-            v3 = from.parent.position.clone();
-        else {
-
-            var g1 = from.parent.parent || from.parent;
-            var g2 = to.parent.parent || to.parent;
-            var from_to = g2.position.clone().sub(g1.position);
-
-            v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
-        }
-
-        var curve = new THREE.QuadraticBezierCurve3(v1, v3, v2);
-        var geometry = new THREE.Geometry();
-        //TODO:
-        //geometry.dynamic = true;
-
-        switch ( BranchesLineStyle ) {
-
-            case STYLELINE.NONE:
-                break;
-
-            case STYLELINE.CURVE:
-                geometry.vertices = curve.getPoints(20);
-                break;
-
-            case STYLELINE.STRAIGHT:
-                geometry.vertices.push( v1, v2 );//straight line
-                break;
-        }
-
-        var line = new THREE.MeshLine();
-        line.setGeometry( 
-
-            geometry,
-            function( p ) { return s3 * p + s1 * ( 1 - p ) + s2 * ( 1 - Math.abs( (p - 0.5) / 0.5 ) ) }//size changes linear from start to end
-        );
-
-        return new THREE.Mesh( line.geometry, material );
     }
 
     function loadBranch( branch ) {
@@ -474,6 +293,68 @@ var TrueCount = ( function () {
 
     function addLinks( nodes, material ) {
 
+        function link( from, to, material ) {
+
+            var v1 = from.position;
+            var v2 = to.position;
+
+            var s2 = BRANCH_WIDTH_MAX * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
+            var s1 = Math.min( from.size, s2 );
+            var s3 = Math.min( to.size, s2 );
+            //var s1 = material.lineWidth * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
+            //var s2 = s1;
+
+            //var v3 = v3Zero.clone();
+            /*var from_to = v2.clone().sub( v1 );
+             var middle_from_to = from_to.clone().multiplyScalar( 0.5 ).add( v1 );//срединная точка между центрами гравитации
+             v3 = v3.clone().sub( middle_from_to ).normalize().multiplyScalar( from_to.length() * 0.8 ).add( middle_from_to );//вектор из срединной точки к центру
+             */
+
+            v3 = v3Zero.clone();
+
+            /*
+             if (from.parent.id == to.parent.id)
+
+             v3 = from.parent.position.clone();
+             else {
+
+             var g1 = from.parent.parent || from.parent;
+             var g2 = to.parent.parent || to.parent;
+             var from_to = g2.position.clone().sub(g1.position);
+
+             v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
+             }
+             */
+
+            var curve = new THREE.QuadraticBezierCurve3(v1, v3, v2);
+            var geometry = new THREE.Geometry();
+            //TODO:
+            //geometry.dynamic = true;
+
+            switch ( BranchesLineStyle ) {
+
+                case STYLELINE.NONE:
+                    break;
+
+                case STYLELINE.CURVE:
+                    geometry.vertices = curve.getPoints(20);
+                    break;
+
+                case STYLELINE.STRAIGHT:
+                    geometry.vertices.push( v1, v2 );//straight line
+                    break;
+            }
+
+            var line = new THREE.MeshLine();
+            line.setGeometry(
+
+                geometry,
+                function( p ) { return s3 * p + s1 * ( 1 - p ) + s2 * ( 1 - Math.abs( (p - 0.5) / 0.5 ) ) }//size changes linear from start to end
+            );
+
+            return new THREE.Mesh( line.geometry, material );
+        }
+
         var mesh = new THREE.Mesh();
 
         $.each( nodes, function ( key, val ){
@@ -484,9 +365,9 @@ var TrueCount = ( function () {
 
                 var v = branches[dstId];
 
-                сделать тут расчет относительно сколько всего ветвей и понижать или повышать планку прохода
-                if ( Branches.xWeight( v.weight ) < 0.005 )
-                    return;
+                //TODO: сортировать вес относительно количества
+                /*if ( Branches.xWeight( v.weight ) < 0.005 )
+                    return;*/
 
                 var srcNode = Nodes[v.src];
                 var dstNode = Nodes[v.dst];
@@ -507,11 +388,11 @@ var TrueCount = ( function () {
         } );
 
         //sceneBranches.add( mesh );
+        mesh.frustumCulled = false;
         scene.add( mesh );
 
         return mesh;
     }
-
 
     /**recursive*/
     function getLinkedNodes( nodeFrom, pathOfNodes ) {
@@ -592,16 +473,6 @@ var TrueCount = ( function () {
         //sceneBranches.background = new THREE.Color( 0x000000 );
     }
 
-    /*
-     function resizeGL( canvas ) {
-     camera.aspect = canvas.width / canvas.height;
-     camera.updateProjectionMatrix();
-
-     renderer.setPixelRatio( canvas.devicePixelRatio );
-     renderer.setSize( canvas.width, canvas.height );
-     }
-     */
-
     function initStats() {
         stats = new Stats();
         stats.setMode( 0 ); // 0: fps, 1: ms
@@ -644,28 +515,6 @@ var TrueCount = ( function () {
         } );
     }
 
-    /*
-    function initRenderTargets() {
-
-        var renderTargetParameters = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat, stencilBuffer: false, generateMipmaps: false };
-
-        renderTargetBranches = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, renderTargetParameters );
-        renderTargetNodes = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, renderTargetParameters );
-
-        composer = new THREE.EffectComposer( renderer );
-
-        //var r = new THREE.RenderPass( sceneNodes, camera );
-        //r.renderToScreen = true;
-        //composer.addPass( r );
-
-        var p = new THREE.ShaderPass( BlendShader );
-        p.uniforms["tDiffuse1"].value = renderTargetBranches.texture;
-        p.uniforms["tDiffuse2"].value = renderTargetNodes.texture;
-        p.renderToScreen = true;
-        //p.needsSwap = true;
-        composer.addPass( p );
-    }
-*/
     function onMouseDblClick( event ) {
 
         showLinked();//hide highlighted elements
@@ -682,9 +531,6 @@ var TrueCount = ( function () {
         mouse.y = - ( ( event.clientY - renderer.context.canvas.offsetTop ) / window.innerHeight ) * 2 + 1;
 
         raycaster.setFromCamera( mouse, camera );
-        //var right = new THREE.Vector3( camera.matrix.elements[0], camera.matrix.elements[1], camera.matrix.elements[2] ).normalize();
-        //var up = new THREE.Vector3( camera.matrix.elements[4], camera.matrix.elements[5], camera.matrix.elements[6] ).normalize();
-        //var backward = new THREE.Vector3( camera.matrix.elements[8], camera.matrix.elements[9], camera.matrix.elements[10] ).normalize();
 
         var octreeObjects = octree.search( 
             raycaster.ray.origin,
@@ -699,17 +545,13 @@ var TrueCount = ( function () {
 
             //TODO:into particlenode class
             //TODO:sort by dist
-            //var x = right.clone().multiplyScalar( val.radius );
-            //var y = up.clone().multiplyScalar( val.radius );
-            //boundingSphere.center = ( x ).sub( y ).add( val.position );
+
             boundingSphere.center = val.position;
             boundingSphere.radius = val.radius;
 
             var pt = raycaster.ray.intersectSphere( boundingSphere );
             if ( pt ) {
-                //var mesh = new THREE.Mesh( new THREE.SphereGeometry( val.radius,10,10 ),new THREE.MeshBasicMaterial( {color:0xffffffff} ) );
-                //mesh.position.set( boundingSphere.center.x,boundingSphere.center.y,boundingSphere.center.z );
-                //scene.add( mesh );
+
                 var id = val.object;
                 var node = Nodes[id];
                 node.dist = pt.distanceToSquared( camera.position );
@@ -739,10 +581,6 @@ var TrueCount = ( function () {
         update();
         requestAnimationFrame( draw );
 
-        /*renderer.render( sceneNodes, camera, renderTargetNodes );
-        renderer.render( sceneBranches, camera, renderTargetBranches );
-
-        composer.render();*/
         renderer.render( scene, camera );
     }
 
@@ -793,51 +631,7 @@ var TrueCount = ( function () {
         ].join( "\n" )
 
     };
-/*
-    const BlendShader = {
 
-        uniforms: {
-
-            "tDiffuse1": { value: null },
-            "tDiffuse2": { value: null }
-
-        },
-
-        vertexShader: [
-
-            "varying vec2 vUv;",
-
-            "void main() {",
-
-            "vUv = uv;",
-            "gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
-
-            "}"
-
-        ].join( "\n" ),
-
-        fragmentShader: [
-
-            //"uniform float opacity;",
-            //"uniform float mixRatio;",
-
-            "uniform sampler2D tDiffuse1;",
-            "uniform sampler2D tDiffuse2;",
-
-            "varying vec2 vUv;",
-
-            "void main() {",
-
-            "vec4 texel1 = texture2D( tDiffuse1, vUv );",
-            "vec4 texel2 = texture2D( tDiffuse2, vUv );",
-            "gl_FragColor = max( texel2, texel1 );",
-
-            "}"
-
-        ].join( "\n" )
-
-    };
-*/
     function initMaterials() {
 
         var canvasSize = new THREE.Vector2( renderer.context.canvas.width, renderer.context.canvas.height );
@@ -874,9 +668,6 @@ var TrueCount = ( function () {
         var branchShowMaterial = branchMaterial.clone();
         branchShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
         branchShowMaterial.blending.value = THREE.AdditiveBlending;
-        //branchShowMaterial.uniforms.lineWidth.value *= 1.5;
-        //branchShowMaterial.transparent.value = false;
-        //branchShowMaterial.uniforms.opacity = 0.5;
 
         var labelSpriteMaterial = new THREE.SpriteMaterial( {
 
