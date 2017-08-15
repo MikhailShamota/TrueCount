@@ -248,44 +248,24 @@ var TrueCount = ( function () {
     function loadNode( node ) {
 
         var id = node.id;
-        //var parentId = node.parent || Nodes[id] && Nodes[id].parent || '';
         var weight = node.weight || Nodes[id] && Nodes[id].weight || 0;
         var doc = node.document || Nodes[id] && Nodes[id].document;
         var alias = node.alias || Nodes[id] && Nodes[id].alias;
 
-        /*if ( Nodes[id] )
-            return;*/
 
-        //var parent = Nodes[parentId];
 
         //var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
         //var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
-
         //if ( parent && !parent.sizeScale )
           //  parent.sizeScale = size / sizeWeighted;//первое значение в выборке самое большое. масштаб всех элементов группировки
-
         //size = sizeWeighted * ( parent && parent.sizeScale || size / sizeWeighted );//итоговый размер - размер нормализованный по самому больщому элементу ( i=0 )
 
-        /*
-         *
-         * CREATING OR UPDATING NODE OBJECT
-         *
-         */
         var obj = Nodes[id] || new Node( id );
 
-        //obj.parent = parent;
         obj.weight = weight;
         //obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
         obj.document = doc;
         obj.alias = alias;
-
-        /*
-        if ( parent ) {
-
-            parent.visible = false;
-            parent.children[obj.id] = obj;
-        }
-        */
 
         Nodes[id] = obj;
 
@@ -321,9 +301,6 @@ var TrueCount = ( function () {
                 Branches[b.src][b.dst] = b;
                 Branches[b.src][b.dst].count = 1;
             }
-
-            //Info.branches.weights.set( Branches[b.src][b.dst].weight );
-            //Info.branches.counts.set( Branches[b.src][b.dst].count );
         }
 
         load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
@@ -343,32 +320,9 @@ var TrueCount = ( function () {
             var s2 = BRANCH_WIDTH_MAX * Info.branches.weights.normalize( Branches[from.id][to.id].weight );
             var s1 = Math.min( from.size, s2 );
             var s3 = Math.min( to.size, s2 );
-            //var s1 = material.lineWidth * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
-            //var s2 = s1;
+            var center = v3Zero.clone();
 
-            //var v3 = v3Zero.clone();
-            /*var from_to = v2.clone().sub( v1 );
-             var middle_from_to = from_to.clone().multiplyScalar( 0.5 ).add( v1 );//срединная точка между центрами гравитации
-             v3 = v3.clone().sub( middle_from_to ).normalize().multiplyScalar( from_to.length() * 0.8 ).add( middle_from_to );//вектор из срединной точки к центру
-             */
-
-            v3 = v3Zero.clone();
-
-            /*
-             if (from.parent.id == to.parent.id)
-
-             v3 = from.parent.position.clone();
-             else {
-
-             var g1 = from.parent.parent || from.parent;
-             var g2 = to.parent.parent || to.parent;
-             var from_to = g2.position.clone().sub(g1.position);
-
-             v3 = from_to.multiplyScalar(0.5).add(g1.position);//срединная точка между центрами гравитации
-             }
-             */
-
-            var curve = new THREE.QuadraticBezierCurve3(v1, v3, v2);
+            var curve = new THREE.QuadraticBezierCurve3(v1, center, v2);
             var geometry = new THREE.Geometry();
             //TODO:
             //geometry.dynamic = true;
@@ -748,10 +702,6 @@ var TrueCount = ( function () {
         init: function() {
 
             init();
-        },
-
-        draw: function() {
-
             draw();
         },
 
@@ -765,25 +715,17 @@ var TrueCount = ( function () {
             loadBranch( branch )//-->Branches
         },
 
-        drawNodes: function( addMode ) {
+        draw: function( ) {
 
-            //sceneNodes.remove( NodesMesh );
-            !addMode && scene.remove( NodesMesh );
+            scene.remove( NodesMesh );
+            scene.remove( BranchesMesh );
 
             updateNodeMetrics( Nodes );
+            updateBranchMetrics( Branches );
 
             setNodesPositions( Nodes );
 
             NodesMesh = addParticles( Nodes, Materials.node );
-        },
-
-        drawLinks: function() {
-
-            //sceneBranches.remove( BranchesMesh );
-            scene.remove( BranchesMesh );
-
-            updateBranchMetrics( Branches );
-
             BranchesMesh = addLinks( Nodes, Materials.branch );
         }
     }
