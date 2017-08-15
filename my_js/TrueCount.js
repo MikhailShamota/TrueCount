@@ -47,11 +47,17 @@ var TrueCount = ( function () {
 
         this.max = Number.MIN_SAFE_INTEGER;
         this.min = Number.MAX_SAFE_INTEGER;
+        this.index = [];
 
-        this.set = function( value ) {
+        this.set = function( key, value ) {
 
-            this.max = Math.max( value, this.max ) || this.max;
-            this.min = Math.min( value, this.min ) || this.min;
+            this.max = Math.max( value, this.max );
+            this.min = Math.min( value, this.min );
+
+            if ( !this.index[ value ] )
+                this.index[ value ] = [];
+
+            this.index[ value ].push( key );
         };
 
         this.normalize  = function( p ) {
@@ -128,6 +134,27 @@ var TrueCount = ( function () {
             node.brightness = node.getBrightness();
 
             octree.addObjectData( node.id, node );//<--overrided / add and upd
+        });
+    }
+
+    function updateNodeMetrics( nodes ) {
+
+        $.each( nodes, function ( id, node ) {
+
+            Info.nodes.weights.set( node.id, node.weight );
+        });
+    }
+
+    function updateBranchMetrics( branches ) {
+
+        $.each( branches, function ( src, branchFrom ) {
+
+            for ( var dstId in branchFrom ) {
+
+                var branch = branchFrom[ dstId ];
+                Info.branches.weights.set( [ branch.src, branch.dst ], branch.weight );
+                Info.branches.counts.set( [ branch.src, branch.dst ], branch.count );
+            }
         });
     }
 
@@ -262,8 +289,6 @@ var TrueCount = ( function () {
 
         Nodes[id] = obj;
 
-        Info.nodes.weights.set( obj.weight );
-
         return obj;
     }
 
@@ -297,12 +322,8 @@ var TrueCount = ( function () {
                 Branches[b.src][b.dst].count = 1;
             }
 
-            //Branches.maxWeight = Math.max( Branches[b.src][b.dst].weight, Branches.maxWeight || Number.MIN_SAFE_INTEGER );
-            //Branches.minWeight = Math.min( Branches[b.src][b.dst].weight, Branches.minWeight || Number.MAX_SAFE_INTEGER );
-            //Branches.maxCount = Math.max( Branches[b.src][b.dst].count, Branches.maxCount || Number.MIN_SAFE_INTEGER );
-            //Branches.minCount = Math.min( Branches[b.src][b.dst].count, Branches.minCount || Number.MAX_SAFE_INTEGER );
-            Info.branches.weights.set( Branches[b.src][b.dst].weight );
-            Info.branches.counts.set( Branches[b.src][b.dst].count );
+            //Info.branches.weights.set( Branches[b.src][b.dst].weight );
+            //Info.branches.counts.set( Branches[b.src][b.dst].count );
         }
 
         load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
@@ -310,11 +331,6 @@ var TrueCount = ( function () {
 
         loadNode( { id: branch.src } ).out++;
         loadNode( { id: branch.dst } ).in++;
-        /*var nodeSrc = Nodes[branch.src] || new Node( branch.src );
-        var nodeDst = Nodes[branch.dst] || new Node( branch.dst );*/
-
-        //nodeSrc.out++;
-        //nodeDst.in++;
     }
 
     function addLinks( nodes, material ) {
@@ -754,6 +770,8 @@ var TrueCount = ( function () {
             //sceneNodes.remove( NodesMesh );
             !addMode && scene.remove( NodesMesh );
 
+            updateNodeMetrics( Nodes );
+
             setNodesPositions( Nodes );
 
             NodesMesh = addParticles( Nodes, Materials.node );
@@ -763,6 +781,8 @@ var TrueCount = ( function () {
 
             //sceneBranches.remove( BranchesMesh );
             scene.remove( BranchesMesh );
+
+            updateBranchMetrics( Branches );
 
             BranchesMesh = addLinks( Nodes, Materials.branch );
         }
