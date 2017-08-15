@@ -43,16 +43,38 @@ var TrueCount = ( function () {
 
     var Materials;
 
+    var metrics = function() {
+
+        this.max = Number.MIN_SAFE_INTEGER;
+        this.min = Number.MAX_SAFE_INTEGER;
+
+        this.set = function( value ) {
+
+            this.max = Math.max( value, this.max ) || this.max;
+            this.min = Math.min( value, this.min ) || this.min;
+        };
+
+        this.normalize  = function( p ) {
+
+            return ( p - this.min ) / ( this.max - this.min ) || 0;
+        };
+    };
+
+    var Info = {
+
+        nodes : {
+
+            weights : new metrics()
+        },
+        branches : {
+
+            weights : new metrics(),
+            counts : new metrics()
+        }
+    };
+
     var Nodes = {};
     var Branches = {};
-    Branches.xWeight  = function( p ) {
-
-        return ( p - this.minWeight ) / ( this.maxWeight - this.minWeight );
-    };
-    Branches.xCount  = function( p ) {
-
-        return ( p - this.minCount ) / ( this.maxCount - this.minCount );
-    };
 
     function Node( id ) {
 
@@ -72,7 +94,7 @@ var TrueCount = ( function () {
 
         this.getBrightness = function() {
 
-            return Branches.xCount( this.out + this.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;
+            return Info.branches.counts.normalize( this.out + this.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;
         };
 
         this.getSize = function() {
@@ -97,9 +119,9 @@ var TrueCount = ( function () {
         };
     }
 
-    function setNodesPosition( nodes ) {
+    function setNodesPositions( nodes ) {
 
-        $.each(nodes, function (id, node) {
+        $.each( nodes, function ( id, node ) {
 
             node.position.copy( node.getPosition() );
             node.size = node.getSize();
@@ -240,6 +262,8 @@ var TrueCount = ( function () {
 
         Nodes[id] = obj;
 
+        Info.nodes.weights.set( obj.weight );
+
         return obj;
     }
 
@@ -273,10 +297,12 @@ var TrueCount = ( function () {
                 Branches[b.src][b.dst].count = 1;
             }
 
-            Branches.maxWeight = Math.max( Branches[b.src][b.dst].weight, Branches.maxWeight || Number.MIN_SAFE_INTEGER );
-            Branches.minWeight = Math.min( Branches[b.src][b.dst].weight, Branches.minWeight || Number.MAX_SAFE_INTEGER );
-            Branches.maxCount = Math.max( Branches[b.src][b.dst].count, Branches.maxCount || Number.MIN_SAFE_INTEGER );
-            Branches.minCount = Math.min( Branches[b.src][b.dst].count, Branches.minCount || Number.MAX_SAFE_INTEGER );
+            //Branches.maxWeight = Math.max( Branches[b.src][b.dst].weight, Branches.maxWeight || Number.MIN_SAFE_INTEGER );
+            //Branches.minWeight = Math.min( Branches[b.src][b.dst].weight, Branches.minWeight || Number.MAX_SAFE_INTEGER );
+            //Branches.maxCount = Math.max( Branches[b.src][b.dst].count, Branches.maxCount || Number.MIN_SAFE_INTEGER );
+            //Branches.minCount = Math.min( Branches[b.src][b.dst].count, Branches.minCount || Number.MAX_SAFE_INTEGER );
+            Info.branches.weights.set( Branches[b.src][b.dst].weight );
+            Info.branches.counts.set( Branches[b.src][b.dst].count );
         }
 
         load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
@@ -298,7 +324,7 @@ var TrueCount = ( function () {
             var v1 = from.position;
             var v2 = to.position;
 
-            var s2 = BRANCH_WIDTH_MAX * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
+            var s2 = BRANCH_WIDTH_MAX * Info.branches.weights.normalize( Branches[from.id][to.id].weight );
             var s1 = Math.min( from.size, s2 );
             var s3 = Math.min( to.size, s2 );
             //var s1 = material.lineWidth * ( Branches[from.id][to.id].weight - Branches.minWeight ) / ( Branches.maxWeight - Branches.minWeight );
@@ -515,24 +541,17 @@ var TrueCount = ( function () {
         } );
     }
 
-    function onMouseDblClick( event ) {
-
-        showLinked();//hide highlighted elements
-    }
-
-    function onMouseClick( event ) {
+    function pickElement( v2event ) {
 
         var mouse = new THREE.Vector2();
         var raycaster = new THREE.Raycaster();
 
-        event.preventDefault();
-
-        mouse.x = ( ( event.clientX - renderer.context.canvas.offsetLeft ) / window.innerWidth ) * 2 - 1;
-        mouse.y = - ( ( event.clientY - renderer.context.canvas.offsetTop ) / window.innerHeight ) * 2 + 1;
+        mouse.x = ( ( v2event.x - renderer.context.canvas.offsetLeft ) / window.innerWidth ) * 2 - 1;
+        mouse.y = - ( ( v2event.y - renderer.context.canvas.offsetTop ) / window.innerHeight ) * 2 + 1;
 
         raycaster.setFromCamera( mouse, camera );
 
-        var octreeObjects = octree.search( 
+        var octreeObjects = octree.search(
             raycaster.ray.origin,
             raycaster.ray.far,
             false/*false to get geometry info*/,
@@ -567,13 +586,26 @@ var TrueCount = ( function () {
         //showLinked( selectedNode );
     }
 
+    function onMouseDblClick( event ) {
+
+        //showLinked();//hide highlighted elements
+        event.preventDefault();
+
+        pickElement( new THREE.Vector2( event.clientX, event.clientY ) );
+    }
+
+    function onMouseClick( event ) {
+
+
+    }
+
     function init() {
+
         initGL();
         initMaterials();
         initStats();
         initControls();
         initOctree();
-        //initRenderTargets();
     }
 
     function draw() {
@@ -722,7 +754,7 @@ var TrueCount = ( function () {
             //sceneNodes.remove( NodesMesh );
             !addMode && scene.remove( NodesMesh );
 
-            setNodesPosition( Nodes );
+            setNodesPositions( Nodes );
 
             NodesMesh = addParticles( Nodes, Materials.node );
         },
