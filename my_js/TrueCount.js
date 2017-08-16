@@ -30,6 +30,8 @@ var TrueCount = ( function () {
     const NODE_MAX_BRIGHTNESS = 10;
     const NODE_MIN_BRIGHTNESS = 1;
 
+    const PERFORMANCE_BRANCHES_LIMIT = 10000;
+
     //var BranchesLineStyle = STYLELINE.STRAIGHT;
 
     var stats, controls;
@@ -125,9 +127,9 @@ var TrueCount = ( function () {
         };
     }
 
-    function setNodesPositions( nodes ) {
+    function setNodesPositions() {
 
-        $.each( nodes, function ( id, node ) {
+        $.each( Nodes, function ( id, node ) {
 
             node.position.copy( node.getPosition() );
             node.size = node.getSize();
@@ -137,17 +139,14 @@ var TrueCount = ( function () {
         });
     }
 
-    function updateNodeMetrics( nodes ) {
+    function updateMetrics() {
 
-        $.each( nodes, function ( id, node ) {
+        $.each( Nodes, function ( id, node ) {
 
             Info.nodes.weights.set( node.id, node.weight );
         });
-    }
 
-    function updateBranchMetrics( branches ) {
-
-        $.each( branches, function ( src, branchFrom ) {
+        $.each( Branches, function ( src, branchFrom ) {
 
             for ( var dstId in branchFrom ) {
 
@@ -158,18 +157,15 @@ var TrueCount = ( function () {
         });
     }
 
-    function addParticles( nodes, material ) {
+    function addParticles( material ) {
 
-        if ( !nodes )
-            return;
-
-        var count = Object.keys( nodes ).length || 0;
+        var count = Object.keys( Nodes ).length || 0;
         var sizes = new Float32Array( count );
         var brightness = new Float32Array( count );
         var positions = new Float32Array( count * 3 );
         var i = 0;
 
-        $.each( nodes, function ( id, node ) {
+        $.each( Nodes, function ( id, node ) {
 
             node.position.toArray( positions, i * 3 );
             sizes[ i ] = node.size;
@@ -252,8 +248,6 @@ var TrueCount = ( function () {
         var doc = node.document || Nodes[id] && Nodes[id].document;
         var alias = node.alias || Nodes[id] && Nodes[id].alias;
 
-
-
         //var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
         //var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
         //if ( parent && !parent.sizeScale )
@@ -286,6 +280,9 @@ var TrueCount = ( function () {
         //branch.dst;
         //branch.doc;
         //branch.weight;
+        //self linked are not allowed
+        if ( branch.src == branch.dst )
+            return;
 
         function load( b ) {
 
@@ -310,7 +307,7 @@ var TrueCount = ( function () {
         loadNode( { id: branch.dst } ).in++;
     }
 
-    function addLinks( nodes, material ) {
+    function addLines( material ) {
 
         function link( from, to, material ) {
 
@@ -352,36 +349,58 @@ var TrueCount = ( function () {
         }
 
         var mesh = new THREE.Mesh();
+        var limit = PERFORMANCE_BRANCHES_LIMIT;
 
-        $.each( nodes, function ( key, val ){
+        //$.each( Nodes, function ( key, val ){
 
-            var branches = val.branches();
+        var weights = [];
+        /*$.each( Info.branches.weights.index, function( key, value ) {
 
-            for ( var dstId in branches ) {
+            weights.push( key )
+        });*/
+        weights = Object.keys( Info.branches.weights.index );
 
-                var v = branches[dstId];
+        weights.sort( function( a, b ) {
+            return Number(a) < Number(b) ? 1 : a == b ? 0 :  -1;
+        });
 
-                //TODO: сортировать вес относительно количества
+        //for ( var weight in Info.branches.weights.index ) {
+        for ( var i = 0; i < weights.length; i++ ) {
+
+            //var branches = val.branches();
+            //var branches = Info.branches.weights.index[ weight ];
+            var branches = Info.branches.weights.index[ weights[ i ] ];
+
+            branches.forEach( function ( v ) {
+
+
+            //for ( var dstId in branches ) {
+
+               // var v = branches[dstId];
+
                 /*if ( Branches.xWeight( v.weight ) < 0.005 )
                     return;*/
 
-                var srcNode = Nodes[v.src];
-                var dstNode = Nodes[v.dst];
+                //var srcNode = Nodes[v.src];
+                //var dstNode = Nodes[v.dst];
+                var srcNode = Nodes[ v[ 0 ] ];
+                var dstNode = Nodes[ v[ 1 ] ];
 
-                if ( !srcNode || !dstNode || !srcNode.visible || !dstNode.visible )
+                if ( !srcNode || !dstNode || !srcNode.visible || !dstNode.visible || limit < 0 )
                     return;
 
                 if ( srcNode.id == dstNode.id )
                     return;//TODO: явно обрабатывать ссылку узла на себя, пока исключаем, считаем узлы самодостижимыми
 
                 mesh.add( link( srcNode, dstNode, material ) );
+                limit--;
 
                 if ( !BranchesMesh )//TODO:
                     v.meshIndex = mesh.children.length - 1;
 
                 //i++;
-           }
-        } );
+           });
+        }//);
 
         //sceneBranches.add( mesh );
         mesh.frustumCulled = false;
@@ -531,9 +550,6 @@ var TrueCount = ( function () {
         var selectedNode = null;
 
         $.each( octreeObjects, function( key, val ) {
-
-            //TODO:into particlenode class
-            //TODO:sort by dist
 
             boundingSphere.center = val.position;
             boundingSphere.radius = val.radius;
@@ -688,6 +704,7 @@ var TrueCount = ( function () {
     }
 
     return {
+
         constructInstance: function constructInstance () {
             if ( instance ) {
                 return instance;
@@ -720,13 +737,11 @@ var TrueCount = ( function () {
             scene.remove( NodesMesh );
             scene.remove( BranchesMesh );
 
-            updateNodeMetrics( Nodes );
-            updateBranchMetrics( Branches );
+            updateMetrics();
+            setNodesPositions();
 
-            setNodesPositions( Nodes );
-
-            NodesMesh = addParticles( Nodes, Materials.node );
-            BranchesMesh = addLinks( Nodes, Materials.branch );
+            NodesMesh = addParticles( Materials.node );
+            BranchesMesh = addLines( Materials.branch );
         }
     }
 
