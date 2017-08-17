@@ -30,7 +30,7 @@ var TrueCount = ( function () {
     const NODE_MAX_BRIGHTNESS = 10;
     const NODE_MIN_BRIGHTNESS = 1;
 
-    const PERFORMANCE_BRANCHES_LIMIT = 10000;
+    const PERFORMANCE_BRANCHES_LIMIT = 1000;
 
     //var BranchesLineStyle = STYLELINE.STRAIGHT;
 
@@ -93,6 +93,10 @@ var TrueCount = ( function () {
         this.out = 0;
         this.visible = true;
         this.label = false;
+
+        this.pos = undefined;
+        this.color = undefined;
+
         this.position = new THREE.Vector3();
 
         this.branches = function() {
@@ -110,6 +114,11 @@ var TrueCount = ( function () {
             return this.weight && Math.pow( this.weight, 1/3 ) / defaultDensity || this.visible && 1 || 0;// * defaultDocumentSize / defaultDocumentDensity;
         };
 
+        this.getColor = function() {
+
+            return this.color || new THREE.Color( 0.15, 0.25, 0.15 );
+        };
+
         this.getPosition = function() {
 
             function getRandomUnitVector( length ) {
@@ -123,7 +132,7 @@ var TrueCount = ( function () {
                 ).multiplyScalar( length );
             }
 
-            return getRandomUnitVector( /*this.parent && this.parent.size || 0*/worldSize + ( Branches.maxCount > 0 ? mountianSize * 0.5 * ( this.in+this.out ) / Branches.maxCount : 0 ) );//.add(this.parent && this.parent.position || v3Zero);
+            return this.pos || getRandomUnitVector( /*this.parent && this.parent.size || 0*/worldSize + ( Branches.maxCount > 0 ? mountianSize * 0.5 * ( this.in+this.out ) / Branches.maxCount : 0 ) );//.add(this.parent && this.parent.position || v3Zero);
         };
     }
 
@@ -134,6 +143,7 @@ var TrueCount = ( function () {
             node.position.copy( node.getPosition() );
             node.size = node.getSize();
             node.brightness = node.getBrightness();
+            node.color = node.getColor();
 
             octree.addObjectData( node.id, node );//<--overrided / add and upd
         });
@@ -163,6 +173,7 @@ var TrueCount = ( function () {
         var sizes = new Float32Array( count );
         var brightness = new Float32Array( count );
         var positions = new Float32Array( count * 3 );
+        var colors = new Float32Array( count * 3 );
         var i = 0;
 
         $.each( Nodes, function ( id, node ) {
@@ -170,6 +181,7 @@ var TrueCount = ( function () {
             node.position.toArray( positions, i * 3 );
             sizes[ i ] = node.size;
             brightness[ i ] = node.brightness;
+            node.color.toArray( colors, i * 3);
 
             node.geometryIndex = i;
 
@@ -180,7 +192,8 @@ var TrueCount = ( function () {
         geometry.addAttribute( "position", new THREE.BufferAttribute( positions, 3 ) );
         geometry.addAttribute( "customSize", new THREE.BufferAttribute( sizes, 1 ) );
         geometry.addAttribute( "customBrightness", new THREE.BufferAttribute( brightness, 1 ) );
-        //TODO:
+        geometry.addAttribute( "customColor", new THREE.BufferAttribute( colors, 3 ) );
+
         //geometry.dynamic = true;
 
         var particles = new THREE.Points( geometry, material );
@@ -247,6 +260,8 @@ var TrueCount = ( function () {
         var weight = node.weight || Nodes[id] && Nodes[id].weight || 0;
         var doc = node.document || Nodes[id] && Nodes[id].document;
         var alias = node.alias || Nodes[id] && Nodes[id].alias;
+        var pos = node.x && node.y && node.z && new THREE.Vector3( node.x, node.y, node.z );
+        var color = node.color || Nodes[id] && Nodes[id].color;
 
         //var size = parent && parent.childSize || worldSize;//размер для элементов внутри parent
         //var sizeWeighted = weight2size( weight ) ;//размер на основании веса объекта
@@ -260,6 +275,8 @@ var TrueCount = ( function () {
         //obj.childSize = defaultDensity * size / sizeWeighted;//размер для элементов внутри
         obj.document = doc;
         obj.alias = alias;
+        obj.pos = pos;
+        obj.color = color;
 
         Nodes[id] = obj;
 
@@ -608,7 +625,9 @@ var TrueCount = ( function () {
 
             "vpSizeY":  { type: "f", value: 1.0 },
             "opacity":  { type: "f", value: 1.0 },
-            "color": { type: "v3", value: null}
+            //"color": { type: "v3", value: null}
+
+
             //"tex": { type: "t", value: THREE.ImageUtils.loadTexture( "2.png" ) }
         },
 
@@ -618,8 +637,10 @@ var TrueCount = ( function () {
 
             "attribute float customSize;",
             "attribute float customBrightness;",
+            "attribute vec3 customColor;",
 
             "varying float brightness;",
+            "varying vec3 color;",
 
 
             "void main() {",
@@ -630,6 +651,7 @@ var TrueCount = ( function () {
             //http://stackoverflow.com/questions/25780145/gl-pointsize-corresponding-to-world-space-size
             "gl_PointSize = vpSizeY * projectionMatrix[1][1] * customSize / gl_Position.w;",
             "brightness = customBrightness;",
+            "color = customColor;",
             "}"
 
         ].join( "\n" ),
@@ -637,9 +659,10 @@ var TrueCount = ( function () {
         fragmentShader: [
 
             "uniform float opacity;",
-            "uniform vec3 color;",
+            //"uniform vec3 color;",
 
             "varying float brightness;",
+            "varying vec3 color;",
 
             "void main() {",
 
@@ -656,7 +679,7 @@ var TrueCount = ( function () {
 
         var nodeMaterial = new THREE.ShaderMaterial( NodeShader );
         nodeMaterial.uniforms.vpSizeY.value = canvasSize.y;
-        nodeMaterial.uniforms.color.value = new THREE.Color( 0.15, 0.25, 0.15 );//new THREE.Color( 0.5, 0.7, 0.4 );
+        //nodeMaterial.uniforms.color.value = new THREE.Color( 0.15, 0.25, 0.15 );//new THREE.Color( 0.5, 0.7, 0.4 );
         nodeMaterial.uniforms.opacity.value = SceneElementOpacity;
         nodeMaterial.transparent = true;
         nodeMaterial.depthWrite = false;
@@ -664,7 +687,7 @@ var TrueCount = ( function () {
 
         var nodeShowMaterial = nodeMaterial.clone();
         //nodeShowMaterial.uniforms.opacity.value = 0.25;
-        nodeShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
+        //nodeShowMaterial.uniforms.color.value = new THREE.Color( 0.6, 1.0, 0.6 );
         nodeShowMaterial.uniforms.opacity.value = 0.5;
         //nodeShowMaterial.uniforms.color.value = new THREE.Color( 1.0, 1.0, 1.0 );
 
