@@ -116,7 +116,7 @@ var TrueCount = ( function () {
 
         this.getColor = function() {
 
-            return this.color || new THREE.Color( 0.15, 0.25, 0.15 );
+            return this.color && new THREE.Color( this.color ) || new THREE.Color( 0.15, 0.25, 0.15 );
         };
 
         this.getPosition = function() {

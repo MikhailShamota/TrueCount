@@ -120,8 +120,11 @@
 
             } else {
 
-                rec.alias = rec.document.name;
+                rec.alias = rec.document && rec.document.name;
                 rec.weight = 1;
+                rec.x *= 100;
+                rec.y *= 100;
+                rec.z *= 100;
                 TrueCount.loadNode( rec );
             }
         } catch (e) {
