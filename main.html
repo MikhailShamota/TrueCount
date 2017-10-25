@@ -118,10 +118,18 @@
                         });
                     }
 
-            } else {
+            }
+            else if ( rec.from && rec.to ) {
+
+                TrueCount.loadBranch({
+                    src: rec.from,
+                    dst: rec.to
+                });
+            }
+            else if ( rec.id ) {
 
                 rec.alias = rec.document && rec.document.name;
-                rec.weight = 1;
+                //rec.weight = 1;
                 rec.x *= 100;
                 rec.y *= 100;
                 rec.z *= 100;

@@ -19,16 +19,19 @@ var TrueCount = ( function () {
 
     const worldSize = 1000;
     const mountianSize = 20;//worldSize+mountianSize
-    const defaultDensity = 0.15;
+//    const defaultDensity = 0.35;
 
-    const SceneElementOpacity = 0.55;
-    const SceneElementFadeOpacity = 0.55;
+    const SceneElementOpacity = 0.75;
+    const SceneElementFadeOpacity = 0.75;
 
     const BranchesLineStyle = STYLELINE.CURVE;
     const BRANCH_WIDTH_MAX = 200;
+    const BRANCH_WIDTH_MIN = 4;
     const LABEL_SIZE = 400;
-    const NODE_MAX_BRIGHTNESS = 10;
-    const NODE_MIN_BRIGHTNESS = 1;
+    const NODE_MAX_BRIGHTNESS = 1;
+    const NODE_MIN_BRIGHTNESS = 0.5;
+    const NODE_MAX_SIZE = 20;
+    const NODE_MIN_SIZE = 0.5;
 
     const PERFORMANCE_BRANCHES_LIMIT = 1000;
 
@@ -64,7 +67,7 @@ var TrueCount = ( function () {
 
         this.normalize  = function( p ) {
 
-            return ( p - this.min ) / ( this.max - this.min ) || 0;
+            return ( p - this.min ) / ( ( this.max - this.min ) || 1 ) || 0;
         };
     };
 
@@ -72,7 +75,8 @@ var TrueCount = ( function () {
 
         nodes : {
 
-            weights : new metrics()
+            weights : new metrics(),
+            links: new metrics()
         },
         branches : {
 
@@ -106,12 +110,13 @@ var TrueCount = ( function () {
 
         this.getBrightness = function() {
 
-            return Info.branches.counts.normalize( this.out + this.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;
+            return Info.nodes.links.normalize( this.out + this.in ) * ( NODE_MAX_BRIGHTNESS - NODE_MIN_BRIGHTNESS ) + NODE_MIN_BRIGHTNESS;
         };
 
         this.getSize = function() {
 
-            return this.weight && Math.pow( this.weight, 1/3 ) / defaultDensity || this.visible && 1 || 0;// * defaultDocumentSize / defaultDocumentDensity;
+            return this.weight && Info.nodes.weights.normalize( this.weight ) * ( NODE_MAX_SIZE - NODE_MIN_SIZE ) + NODE_MIN_SIZE || this.visible && 1 || 0;
+            //return this.weight && Math.pow( this.weight, 1/3 ) / defaultDensity || this.visible && 1 || 0;// * defaultDocumentSize / defaultDocumentDensity;
         };
 
         this.getColor = function() {
@@ -154,6 +159,7 @@ var TrueCount = ( function () {
         $.each( Nodes, function ( id, node ) {
 
             Info.nodes.weights.set( node.id, node.weight );
+            Info.nodes.links.set( node.id, node.in + node.out );
         });
 
         $.each( Branches, function ( src, branchFrom ) {
@@ -317,8 +323,8 @@ var TrueCount = ( function () {
             }
         }
 
-        load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight } );
-        load( { src:branch.dst, dst:branch.src, doc:branch.doc, weight:branch.weight } );
+        load( { src:branch.src, dst:branch.dst, doc:branch.doc, weight:branch.weight || 1 } );
+        load( { src:branch.dst, dst:branch.src, doc:branch.doc, weight:branch.weight || 1 } );
 
         loadNode( { id: branch.src } ).out++;
         loadNode( { id: branch.dst } ).in++;
@@ -331,7 +337,7 @@ var TrueCount = ( function () {
             var v1 = from.position;
             var v2 = to.position;
 
-            var s2 = BRANCH_WIDTH_MAX * Info.branches.weights.normalize( Branches[from.id][to.id].weight );
+            var s2 = ( BRANCH_WIDTH_MAX - BRANCH_WIDTH_MIN ) * Info.branches.weights.normalize( Branches[from.id][to.id].weight ) + BRANCH_WIDTH_MIN;
             var s1 = Math.min( from.size, s2 );
             var s3 = Math.min( to.size, s2 );
             var center = v3Zero.clone();
@@ -370,18 +376,12 @@ var TrueCount = ( function () {
 
         //$.each( Nodes, function ( key, val ){
 
-        var weights = [];
-        /*$.each( Info.branches.weights.index, function( key, value ) {
-
-            weights.push( key )
-        });*/
-        weights = Object.keys( Info.branches.weights.index );
+        var weights = Object.keys( Info.branches.weights.index );
 
         weights.sort( function( a, b ) {
             return Number(a) < Number(b) ? 1 : a == b ? 0 :  -1;
         });
 
-        //for ( var weight in Info.branches.weights.index ) {
         for ( var i = 0; i < weights.length; i++ ) {
 
             //var branches = val.branches();
@@ -390,16 +390,6 @@ var TrueCount = ( function () {
 
             branches.forEach( function ( v ) {
 
-
-            //for ( var dstId in branches ) {
-
-               // var v = branches[dstId];
-
-                /*if ( Branches.xWeight( v.weight ) < 0.005 )
-                    return;*/
-
-                //var srcNode = Nodes[v.src];
-                //var dstNode = Nodes[v.dst];
                 var srcNode = Nodes[ v[ 0 ] ];
                 var dstNode = Nodes[ v[ 1 ] ];
 
@@ -666,7 +656,7 @@ var TrueCount = ( function () {
 
             "void main() {",
 
-            "gl_FragColor = vec4( color * opacity, opacity ) * brightness;",
+            "gl_FragColor = vec4( color * brightness, opacity );",
             "}"
 
         ].join( "\n" )
